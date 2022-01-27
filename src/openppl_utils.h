@@ -26,11 +26,13 @@
 
 #pragma once
 
-#include "install/include/ppl/nn/models/onnx/onnx_runtime_builder_factory.h"
+#include "ppl/nn/models/onnx/onnx_runtime_builder_factory.h"
+#include "ppl/nn/engines/cuda/cuda_options.h"
+#include "ppl/nn/common/logger.h"
 #include <set>
 #include <string>
-#include <unordered_map>
 #include <vector>
+#include <functional>
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonserver.h"
 
@@ -48,6 +50,43 @@ extern const unique_ptr<ppl::nn::Runtime> runtime;
           TRITONSERVER_ERROR_INTERNAL, (Message + " " + GetRetCodeStr(status)));  \
     }                                                                             \
   } while (false)
+
+static const char* MemMem(const char* haystack, unsigned int haystack_len, const char* needle,
+                          unsigned int needle_len) {
+    if (!haystack || haystack_len == 0 || !needle || needle_len == 0) {
+        return nullptr;
+    }
+
+    for (auto h = haystack; haystack_len >= needle_len; ++h, --haystack_len) {
+        if (memcmp(h, needle, needle_len) == 0) {
+            return h;
+        }
+    }
+    return nullptr;
+}
+
+static void SplitString(const char* str, unsigned int len, const char* delim, unsigned int delim_len,
+                        const function<bool(const char* s, unsigned int l)>& f) {
+    const char* end = str + len;
+
+    while (str < end) {
+        auto cursor = MemMem(str, len, delim, delim_len);
+        if (!cursor) {
+            f(str, end - str);
+            return;
+        }
+
+        if (!f(str, cursor - str)) {
+            return;
+        }
+
+        cursor += delim_len;
+        str = cursor;
+        len = end - cursor;
+    }
+
+    f("", 0); // the last empty field
+}
 
 static bool ParseInputShapes(const string& shape_str, vector<vector<int64_t>>* input_shapes) {
     bool ok = true;

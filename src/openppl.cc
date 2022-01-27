@@ -65,7 +65,7 @@ class ModelState : public BackendModel {
 
  private:
   ModelState(TRITONBACKEND_Model* triton_model);
-  AutoCompleteConfig()
+  TRITONSERVER_Error* AutoCompleteConfig();
 };
 
 TRITONSERVER_Error*
@@ -104,6 +104,39 @@ ModelState::ModelState(TRITONBACKEND_Model* triton_model)
 {
 }
 
+TRITONSERVER_Error*
+ModelState::AutoCompleteConfig()
+{
+  // If the model configuration already specifies inputs and outputs
+  // then don't perform any auto-completion.
+  size_t input_cnt = 0;
+  size_t output_cnt = 0;
+  {
+    triton::common::TritonJson::Value inputs;
+    if (ModelConfig().Find("input", &inputs)) {
+      input_cnt = inputs.ArraySize();
+    }
+
+    triton::common::TritonJson::Value config_batch_inputs;
+    if (ModelConfig().Find("batch_input", &config_batch_inputs)) {
+      input_cnt += config_batch_inputs.ArraySize();
+    }
+
+    triton::common::TritonJson::Value outputs;
+    if (ModelConfig().Find("output", &outputs)) {
+      output_cnt = outputs.ArraySize();
+    }
+  }
+
+  if ((input_cnt > 0) && (output_cnt > 0)) {
+    LOG_MESSAGE(
+        TRITONSERVER_LOG_INFO,
+        (std::string("skipping model configuration auto-complete for '") +
+         Name() + "': inputs and outputs already specified")
+            .c_str());
+    return nullptr;  // success
+  }
+}
 
 //
 // ModelInstanceState
@@ -127,7 +160,7 @@ class ModelInstanceState : public BackendModelInstance {
   ModelInstanceState(
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance);
-  RetCode RegisterCudaEngine(vector<unique_ptr<Engine>>* engines);
+  TRITONSERVER_Error* RegisterCudaEngine(vector<unique_ptr<Engine>>* engines);
   TRITONSERVER_Error* SetInputTensors(
       size_t total_batch_size, TRITONBACKEND_Request** requests,
       const uint32_t request_count,
@@ -176,49 +209,50 @@ ModelInstanceState::ModelInstanceState(
   vector<unique_ptr<Engine>> engines;
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     try {
-      RegisterCudaEngine(engines);
+      RegisterCudaEngine(&engines);
     }
     catch (const BackendModelInstanceException& ex) {
-      throw TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL, ("Register cuda engine fail."));
+      throw BackendModelException(TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG, ("Register cuda engine fail.")));
     }
   } else { // Only support GPU right now
-    throw TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INTERNAL, ("Unsupport engine type."));
+    throw BackendModelException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_UNSUPPORTED, ("Only support GPU. Unsupport engine type input.")));
   }
 
   triton::common::TritonJson::Value param;
-  if (!sequence_batching.Find("params", &param)) {
-    throw TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INTERNAL, ("Read params fail."));
-  }
+  if (model_state_->ModelConfig().Find("params", &param)) {
+    string g_flag_onnx_model;
+    param.MemberAsString("onnx-model", &g_flag_onnx_model);
+    if (!g_flag_onnx_model.empty()) {
+        vector<Engine*> engine_ptrs(engines.size());
+        for (uint32_t i = 0; i < engines.size(); ++i) {
+            engine_ptrs[i] = engines[i].get();
+        }
+        auto builder = unique_ptr<RuntimeBuilder>(
+            OnnxRuntimeBuilderFactory::Create(g_flag_onnx_model.c_str(), engine_ptrs.data(), engine_ptrs.size()));
+        if (!builder) {
+            throw BackendModelException(TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG, ("Init builder fail.")));
+        }
 
-  string g_flag_onnx_model;
-  param.MemberAsString("onnx-model", &g_flag_onnx_model));
-  if (!g_flag_onnx_model.empty()) {
-      vector<Engine*> engine_ptrs(engines.size());
-      for (uint32_t i = 0; i < engines.size(); ++i) {
-          engine_ptrs[i] = engines[i].get();
-      }
-      auto builder = unique_ptr<RuntimeBuilder>(
-          OnnxRuntimeBuilderFactory::Create(g_flag_onnx_model.c_str(), engine_ptrs.data(), engine_ptrs.size()));
-      if (!builder) {
-          throw TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INTERNAL, ("Read params fail."));
-      }
-
-      runtime_.reset(builder->CreateRuntime());
-  }
-
-  if (!runtime_) {
-    throw TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_INTERNAL, ("Reset runtime fail."));
+        runtime_.reset(builder->CreateRuntime());
+    }  
+    
+    if (!runtime_) {
+      throw BackendModelException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL, ("Init runtime fail.")));
+    }
+  else {
+    throw BackendModelException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, ("Read params fail.")));
   }
 }
 
-TRITONSERVER_Error*
-RegisterCudaEngine(vector<unique_ptr<Engine>>* engines) {
-  CudaEngineOptions options;
+TRITONSERVER_Error* 
+ModelInstasasdfanceState::RegisterCudaEngine(vector<unique_ptr<Engine>>* engines)
+{
+  ppl::nn::CudaEngineOptions options;
   options.device_id = g_flag_device_id;
 
   triton::common::TritonJson::Value param;
@@ -239,7 +273,7 @@ RegisterCudaEngine(vector<unique_ptr<Engine>>* engines) {
   }
   cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, g_flag_quick_select);
 
-  string g_flag_kernel_type;
+  std::string g_flag_kernel_type;
   param.MemberAsString("kerne-type", &g_flag_kernel_type));
   if (!g_flag_kernel_type.empty()) {
       string kernel_type_str(g_flag_kernel_type);
@@ -257,8 +291,8 @@ RegisterCudaEngine(vector<unique_ptr<Engine>>* engines) {
       if (kernel_type != DATATYPE_UNKNOWN) {
         cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_KERNEL_TYPE, kernel_type);
       } else {
-        return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL, ("invalid kernel type[" + g_flag_kernel_type + "]. valid values: int8/16/32/64,float16/32."));
+        return BackendModelException(TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL, ("invalid kernel type[" + g_flag_kernel_type + "]. valid values: int8/16/32/64,float16/32.")));
       }
   }
 
@@ -268,8 +302,8 @@ RegisterCudaEngine(vector<unique_ptr<Engine>>* engines) {
       string file_content;
       auto status = ReadFileContent(g_flag_quant_file.c_str(), &file_content);
       if (status != RC_SUCCESS) {
-          return TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INTERNAL, ("invalid quant file path[" + g_flag_kernel_type + "]."));
+          return BackendModelException(TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INTERNAL, ("invalid quant file path[" + g_flag_kernel_type + "].")));
       }
       cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_QUANT_INFO, file_content.c_str());
   }
@@ -288,8 +322,8 @@ RegisterCudaEngine(vector<unique_ptr<Engine>>* engines) {
           // try to create this file first
           ofstream ofs(g_flag_export_algo_file, ios_base::app);
           if (!ofs.is_open()) {
-              return TRITONSERVER_ErrorNew(
-                  TRITONSERVER_ERROR_INTERNAL, ("invalid algo file path[" + g_flag_import_algo_file + "]."));
+              return BackendModelException(TRITONSERVER_ErrorNew(
+                  TRITONSERVER_ERROR_INTERNAL, ("invalid algo file path[" + g_flag_import_algo_file + "].")));
           }
           ofs.close();
       }
@@ -302,8 +336,8 @@ RegisterCudaEngine(vector<unique_ptr<Engine>>* engines) {
   if (!g_flag_input_shapes.empty()) {
       vector<vector<int64_t>> input_shapes;
       if (!ParseInputShapes(g_flag_input_shapes, &input_shapes)) {
-          return TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INTERNAL, ("invalid input shapes[" + g_flag_input_shapes + "]."));
+          return BackendModelException(TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INTERNAL, ("invalid input shapes[" + g_flag_input_shapes + "].")));
       }
 
       vector<utils::Array<int64_t>> dims(input_shapes.size());
@@ -345,12 +379,12 @@ ModelInstanceState::ProcessRequests(
     if (requests[i] == nullptr) {
       RequestsRespondWithError(
           requests, request_count,
-          TRITONSERVER_ErrorNew(
+          BackendModelException(TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INTERNAL,
               std::string(
                   "null request given to ONNX Runtime backend for '" + Name() +
                   "'")
-                  .c_str()));
+                  .c_str())));
       return;
     }
 
@@ -388,7 +422,7 @@ ModelInstanceState::ProcessRequests(
   if ((total_batch_size != 1) && (total_batch_size > (size_t)max_batch_size)) {
     RequestsRespondWithError(
         requests, request_count,
-        TRITONSERVER_ErrorNew(
+        BackendModelException(TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL,
             std::string(
                 "batch size " + std::to_string(total_batch_size) + " for '" +
