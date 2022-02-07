@@ -174,6 +174,9 @@ class ModelInstanceState : public BackendModelInstance {
       std::vector<TRITONBACKEND_Response*>* responses,
       BackendInputCollector* collector, std::vector<const char*>* input_names,
       bool* cuda_copy);
+  TRITONSERVER_Error* OpenPPLRun(
+      std::vector<TRITONBACKEND_Response*>* responses,
+      const uint32_t response_count);
   TRITONSERVER_Error* ReadOutputTensors(
       size_t total_batch_size, TRITONBACKEND_Request** requests,
       const uint32_t request_count,
@@ -478,8 +481,8 @@ ModelInstanceState::ProcessRequests(
       model_state_->EnablePinnedInput(), CudaStream(), nullptr, nullptr, 0,
       HostPolicyName().c_str());
 
-  RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-      responses, request_count, all_response_failed,
+  RESPOND_ALL_AND_RETURN_IF_ERROR(
+      requests, request_count, &responses,
       SetInputTensors(
           total_batch_size, requests, request_count, &responses, &collector,
           &input_names, &cuda_copy));
@@ -494,22 +497,17 @@ ModelInstanceState::ProcessRequests(
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
 
-  // TODO: Run One By One
-  // if (!all_response_failed) {
-  //   RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-  //       responses, request_count, all_response_failed,
-  //       RunOneByOne(&responses, request_count));
-  // }
+  // TODO: Run
+  RESPOND_ALL_AND_RETURN_IF_ERROR(
+    requests, request_count, &responses, OpenPPLRun(&responses, request_count));
 
   uint64_t compute_end_ns = 0;
   SET_TIMESTAMP(compute_end_ns);
 
-  if (!all_response_failed) {
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
-        ReadOutputTensors(
-            total_batch_size, requests, request_count, &responses));
-  }
+  RESPOND_ALL_AND_RETURN_IF_ERROR(
+      requests, request_count, &responses,
+      ReadOutputTensors(total_batch_size, requests, request_count, &responses));
+
 
   uint64_t exec_end_ns = 0;
   SET_TIMESTAMP(exec_end_ns);
@@ -654,14 +652,28 @@ ModelInstanceState::SetInputTensors(
 /////////////////////////////////////////////////////////////////////////////
 
 TRITONSERVER_Error*
+ModelInstanceState::OpenPPLRun(
+    std::vector<TRITONBACKEND_Response*>* responses,
+    const uint32_t response_count)
+{
+  auto status = runtime_->Run();
+  if (status != ppl::common::RC_SUCCESS) {
+    LOG_MESSAGE(TRITONSERVER_LOG_INFO, "Run failed.");
+  }
+  LOG_MESSAGE(TRITONSERVER_LOG_INFO, "Run OK.");
+  return nullptr;
+}
+
+
+TRITONSERVER_Error*
 ModelInstanceState::ReadOutputTensors(
     size_t total_batch_size, TRITONBACKEND_Request** requests,
     const uint32_t request_count,
     std::vector<TRITONBACKEND_Response*>* responses)
 {
   BackendOutputResponder responder(
-      requests, request_count, responses, model_state_->TritonMemoryManager(),
-      model_state_->MaxBatchSize() > 0, model_state_->EnablePinnedInput(),
+      requests, request_count, responses, model_state_->MaxBatchSize(),
+      model_state_->TritonMemoryManager(), model_state_->EnablePinnedInput(),
       CudaStream());
 
   // Use to hold string output contents

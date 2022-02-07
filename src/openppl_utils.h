@@ -45,6 +45,32 @@ using namespace std;
 
 namespace triton { namespace backend { namespace openppl {
 
+#define RESPOND_ALL_AND_RETURN_IF_ERROR(                          \
+    REQUESTS, REQUEST_COUNT, RESPONSES, S)                        \
+  do {                                                            \
+    TRITONSERVER_Error* raarie_err__ = (S);                       \
+    if (raarie_err__ != nullptr) {                                \
+      for (uint32_t r = 0; r < REQUEST_COUNT; ++r) {              \
+        TRITONBACKEND_Response* response = (*RESPONSES)[r];       \
+        if (response != nullptr) {                                \
+          LOG_IF_ERROR(                                           \
+              TRITONBACKEND_ResponseSend(                         \
+                  response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, \
+                  raarie_err__),                                  \
+              "failed to send ONNXRuntime backend response");     \
+          response = nullptr;                                     \
+        }                                                         \
+        LOG_IF_ERROR(                                             \
+            TRITONBACKEND_RequestRelease(                         \
+                REQUESTS[r], TRITONSERVER_REQUEST_RELEASE_ALL),   \
+            "failed releasing request");                          \
+        REQUESTS[r] = nullptr;                                    \
+      }                                                           \
+      TRITONSERVER_ErrorDelete(raarie_err__);                     \
+      return;                                                     \
+    }                                                             \
+  } while (false) 
+
 extern const unique_ptr<ppl::nn::Runtime> runtime;
 
 ppl::common::RetCode ReadFileContent(const char* fname, string* buf);
