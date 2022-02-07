@@ -20,7 +20,6 @@ set(TRITON_BUILD_CUDA_VERSION "" CACHE STRING "Version of CUDA install")
 set(TRITON_BUILD_CUDA_HOME "" CACHE PATH "Path to CUDA install")
 set(TRITON_BUILD_CUDNN_HOME "" CACHE PATH "Path to CUDNN install")
 set(TRITON_BUILD_TENSORRT_HOME "" CACHE PATH "Path to TensorRT install")
-set(TRITON_OPENPPL_INCLUDE_PATHS "" CACHE PATH "Paths to OpenPPL includes")
 set(TRITON_ONNX_TENSORRT_REPO_TAG "" CACHE STRING "Tag for onnx-tensorrt repo")
 set(TRT_VERSION "" CACHE STRING "TRT version for this build.")
 set(TRITON_OPENPPL_LIB_PATHS "" CACHE PATH "Paths to OpenPPL libraries")
@@ -29,8 +28,6 @@ set(TRITON_BACKEND_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server
 set(TRITON_CORE_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/core repo")
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
 set(OPENPPL_REPO_TAG "main" CACHE STRING "Tag for openppl repo")
-
-set(TRITON_OPENPPL_INCLUDE_PATHS "${CMAKE_CURRENT_BINARY_DIR}/build/_deps/openppl-src/include")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)

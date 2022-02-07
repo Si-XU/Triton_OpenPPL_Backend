@@ -24,18 +24,19 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <stdint.h>
-#include <mutex>
-#include <vector>
-#include <string>
-#include <map>
 #include "openppl_utils.h"
+#include "ppl/nn/utils/array.h"
 #include "triton/backend/backend_common.h"
 #include "triton/backend/backend_input_collector.h"
 #include "triton/backend/backend_memory.h"
 #include "triton/backend/backend_model.h"
 #include "triton/backend/backend_model_instance.h"
 #include "triton/backend/backend_output_responder.h"
+
+#include <vector>
+#include <string>
+#include <mutex>
+#include <map>
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
@@ -97,6 +98,7 @@ ModelState::Create(TRITONBACKEND_Model* triton_model, ModelState** model_state)
     RETURN_IF_ERROR(TRITONBACKEND_ModelSetConfig(
         triton_model, 1 /* config_version */, message));
   }
+  return nullptr;
 }
 
 ModelState::ModelState(TRITONBACKEND_Model* triton_model)
@@ -136,6 +138,7 @@ ModelState::AutoCompleteConfig()
             .c_str());
     return nullptr;  // success
   }
+  return nullptr;  // success
 }
 
 //
@@ -156,6 +159,10 @@ class ModelInstanceState : public BackendModelInstance {
   void ProcessRequests(
       TRITONBACKEND_Request** requests, const uint32_t request_count);
 
+  ModelState* StateForModel() {
+    return model_state_;
+  }
+
  private:
   ModelInstanceState(
       ModelState* model_state,
@@ -165,10 +172,11 @@ class ModelInstanceState : public BackendModelInstance {
       size_t total_batch_size, TRITONBACKEND_Request** requests,
       const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses,
-      std::vector<const char*>* input_names);
+      BackendInputCollector* collector, std::vector<const char*>* input_names,
+      bool* cuda_copy);
   TRITONSERVER_Error* ReadOutputTensors(
-      size_t total_batch_size, const std::vector<const char*>& output_names,
-      TRITONBACKEND_Request** requests, const uint32_t request_count,
+      size_t total_batch_size, TRITONBACKEND_Request** requests,
+      const uint32_t request_count,
       std::vector<TRITONBACKEND_Response*>* responses);
 
   ModelState* model_state_;
@@ -243,22 +251,22 @@ ModelInstanceState::ModelInstanceState(
       throw BackendModelException(TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL, ("Init runtime fail.")));
     }
-  else {
+  } else {
     throw BackendModelException(TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, ("Read params fail.")));
   }
 }
 
 TRITONSERVER_Error* 
-ModelInstasasdfanceState::RegisterCudaEngine(vector<unique_ptr<Engine>>* engines)
+ModelInstanceState::RegisterCudaEngine(vector<unique_ptr<Engine>> *engines)
 {
-  ppl::nn::CudaEngineOptions options;
-  options.device_id = g_flag_device_id;
+  CudaEngineOptions options;
+  options.device_id = DeviceId();
 
   triton::common::TritonJson::Value param;
-  if (sequence_batching.Find("params", &param)) {
+  if (model_state_->ModelConfig().Find("params", &param)) {
     string policy;
-    param.MemberAsString("mm-policy", &policy));
+    param.MemberAsString("mm-policy", &policy);
     if (policy == "perf") {
         options.mm_policy = CUDA_MM_BEST_FIT;
     } else if (policy == "mem") {
@@ -271,14 +279,15 @@ ModelInstasasdfanceState::RegisterCudaEngine(vector<unique_ptr<Engine>>* engines
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INTERNAL, ("invalid cuda engine"));
   }
-  cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, g_flag_quick_select);
+
+  int64_t g_flag_quick_select = 0;
+  param.MemberAsInt("quick-select", &g_flag_quick_select);
+  cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, (bool)g_flag_quick_select);
 
   std::string g_flag_kernel_type;
-  param.MemberAsString("kerne-type", &g_flag_kernel_type));
+  param.MemberAsString("kerne-type", &g_flag_kernel_type);
   if (!g_flag_kernel_type.empty()) {
       string kernel_type_str(g_flag_kernel_type);
-      std::transform(g_flag_kernel_type.begin(), g_flag_kernel_type.end(),
-                      kernel_type_str.begin(), ::toupper);
 
       datatype_t kernel_type = DATATYPE_UNKNOWN;
       for (datatype_t i = DATATYPE_UNKNOWN; i < DATATYPE_MAX; i++) {
@@ -291,39 +300,42 @@ ModelInstasasdfanceState::RegisterCudaEngine(vector<unique_ptr<Engine>>* engines
       if (kernel_type != DATATYPE_UNKNOWN) {
         cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_KERNEL_TYPE, kernel_type);
       } else {
-        return BackendModelException(TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL, ("invalid kernel type[" + g_flag_kernel_type + "]. valid values: int8/16/32/64,float16/32.")));
+        string message = "invalid kernel type[" + g_flag_kernel_type + "]. valid values: int8/16/32/64,float16/32.";
+        return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INTERNAL, message.data());
       }
   }
 
   string g_flag_quant_file;
-  param.MemberAsString("quant-file", &g_flag_quant_file));
+  param.MemberAsString("quant-file", &g_flag_quant_file);
   if (!g_flag_quant_file.empty()) {
       string file_content;
       auto status = ReadFileContent(g_flag_quant_file.c_str(), &file_content);
       if (status != RC_SUCCESS) {
-          return BackendModelException(TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INTERNAL, ("invalid quant file path[" + g_flag_kernel_type + "].")));
+        string message = "invalid quant file path[" + g_flag_kernel_type + "].";
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL, message.data());
       }
       cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_QUANT_INFO, file_content.c_str());
   }
 
   string g_flag_export_algo_file;
-  param.MemberAsString("export-algo-file", &g_flag_export_algo_file));
+  param.MemberAsString("export-algo-file", &g_flag_export_algo_file);
   if (!g_flag_export_algo_file.empty()) {
       cuda_engine->Configure(ppl::nn::CUDA_CONF_EXPORT_ALGORITHMS, g_flag_export_algo_file.c_str());
   }
 
   string g_flag_import_algo_file;
-  param.MemberAsString("import-algo-file", &g_flag_import_algo_file));  
+  param.MemberAsString("import-algo-file", &g_flag_import_algo_file);  
   if (!g_flag_import_algo_file.empty()) {
       // import and export from the same file
       if (g_flag_import_algo_file == g_flag_export_algo_file) {
           // try to create this file first
           ofstream ofs(g_flag_export_algo_file, ios_base::app);
           if (!ofs.is_open()) {
-              return BackendModelException(TRITONSERVER_ErrorNew(
-                  TRITONSERVER_ERROR_INTERNAL, ("invalid algo file path[" + g_flag_import_algo_file + "].")));
+            string message = "invalid algo file path[" + g_flag_import_algo_file + "].";
+            return TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INTERNAL, message.data());
           }
           ofs.close();
       }
@@ -332,12 +344,13 @@ ModelInstasasdfanceState::RegisterCudaEngine(vector<unique_ptr<Engine>>* engines
 
   // pass input shapes to cuda engine for further optimizations
   string g_flag_input_shapes;
-  param.MemberAsString("input-shapes", &g_flag_input_shapes));  
+  param.MemberAsString("input-shapes", &g_flag_input_shapes);  
   if (!g_flag_input_shapes.empty()) {
       vector<vector<int64_t>> input_shapes;
       if (!ParseInputShapes(g_flag_input_shapes, &input_shapes)) {
-          return BackendModelException(TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INTERNAL, ("invalid input shapes[" + g_flag_input_shapes + "].")));
+        string message = "invalid input shapes[" + g_flag_input_shapes + "].";
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INTERNAL, message.data());
       }
 
       vector<utils::Array<int64_t>> dims(input_shapes.size());
@@ -379,12 +392,12 @@ ModelInstanceState::ProcessRequests(
     if (requests[i] == nullptr) {
       RequestsRespondWithError(
           requests, request_count,
-          BackendModelException(TRITONSERVER_ErrorNew(
+          TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INTERNAL,
               std::string(
                   "null request given to ONNX Runtime backend for '" + Name() +
                   "'")
-                  .c_str())));
+                  .c_str()));
       return;
     }
 
@@ -422,7 +435,7 @@ ModelInstanceState::ProcessRequests(
   if ((total_batch_size != 1) && (total_batch_size > (size_t)max_batch_size)) {
     RequestsRespondWithError(
         requests, request_count,
-        BackendModelException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL,
             std::string(
                 "batch size " + std::to_string(total_batch_size) + " for '" +
@@ -482,11 +495,12 @@ ModelInstanceState::ProcessRequests(
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
 
-  if (!all_response_failed) {
-    RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
-        responses, request_count, all_response_failed,
-        RunOneByOne(&responses, request_count));
-  }
+  // TODO: Run One By One
+  // if (!all_response_failed) {
+  //   RESPOND_ALL_AND_SET_TRUE_IF_ERROR(
+  //       responses, request_count, all_response_failed,
+  //       RunOneByOne(&responses, request_count));
+  // }
 
   uint64_t compute_end_ns = 0;
   SET_TIMESTAMP(compute_end_ns);
@@ -567,12 +581,11 @@ ModelInstanceState::SetInputTensors(
         nullptr, nullptr));
 
     input_names->emplace_back(input_name);
-    input_tensors_.emplace_back(nullptr);
 
     std::vector<int64_t> batchn_shape;
     // For a ragged input tensor, the tensor shape should be
     // the flatten shape of the whole batch
-    if (StateForModel()->IsInputRagged(input_name)) {
+    if (model_state_->IsInputRagged(input_name)) {
       batchn_shape = std::vector<int64_t>{0};
       for (size_t idx = 0; idx < request_count; idx++) {
         TRITONBACKEND_Input* input;
@@ -600,7 +613,7 @@ ModelInstanceState::SetInputTensors(
 
     std::vector<int64_t> input_dims = batchn_shape;
     for (size_t i = 0; i < input_dims_count; i++) {
-      input_dims.emplace(input_shape[i]);
+      input_dims.push_back(input_shape[i]);
     }
 
     // The input must be in contiguous CPU memory. Use appropriate
@@ -656,19 +669,18 @@ ModelInstanceState::ReadOutputTensors(
   bool cuda_copy = false;
   std::pair<TRITONSERVER_MemoryType, int64_t> alloc_perference = {
       TRITONSERVER_MEMORY_CPU, 0};
-  auto& model_outputs = StateForModel()->ModelOutputs();
 
   for (uint32_t i = 0; i < runtime_->GetOutputCount(); i++) {
     auto ppl_tensor = runtime_->GetOutputTensor(i);
     auto ppl_shape = ppl_tensor->GetShape();
     auto name = ppl_tensor->GetName();
-    const BatchOutput* batch_output = StateForModel()->FindBatchOutput(name);
+    // const BatchOutput* batch_output = model_state_->FindBatchOutput(name);
 
     TRITONSERVER_DataType dtype = ConvertFromOpenPPLDataType(ppl_shape->GetDataType());
 
     std::vector<int64_t> batchn_shape;
     for (uint32_t j = 0; j < ppl_shape->GetDimCount(); i++)
-      batchn_shape.emplace(ppl_shape->GetDim(j));
+      batchn_shape.push_back(ppl_shape->GetDim(j));
     
     responder.ProcessTensor(
               name, dtype, batchn_shape, reinterpret_cast<char*>(ppl_tensor->GetBufferPtr()),
@@ -685,5 +697,199 @@ ModelInstanceState::ReadOutputTensors(
 #endif  // TRITON_ENABLE_GPU
   return nullptr;
 }
+
+///////////////////////////////////////////////////////////////////////////
+
+extern "C" {
+
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_Initialize(TRITONBACKEND_Backend* backend)
+{
+  const char* cname;
+  RETURN_IF_ERROR(TRITONBACKEND_BackendName(backend, &cname));
+  std::string name(cname);
+
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("TRITONBACKEND_Initialize: ") + name).c_str());
+
+  // Check the backend API version that Triton supports vs. what this
+  // backend was compiled against.
+  uint32_t api_version_major, api_version_minor;
+  RETURN_IF_ERROR(
+      TRITONBACKEND_ApiVersion(&api_version_major, &api_version_minor));
+
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("Triton TRITONBACKEND API version: ") +
+       std::to_string(api_version_major) + "." +
+       std::to_string(api_version_minor))
+          .c_str());
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("'") + name + "' TRITONBACKEND API version: " +
+       std::to_string(TRITONBACKEND_API_VERSION_MAJOR) + "." +
+       std::to_string(TRITONBACKEND_API_VERSION_MINOR))
+          .c_str());
+
+  if ((api_version_major != TRITONBACKEND_API_VERSION_MAJOR) ||
+      (api_version_minor < TRITONBACKEND_API_VERSION_MINOR)) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_UNSUPPORTED,
+        (std::string("Triton TRITONBACKEND API version: ") +
+         std::to_string(api_version_major) + "." +
+         std::to_string(api_version_minor) + " does not support '" + name +
+         "' TRITONBACKEND API version: " +
+         std::to_string(TRITONBACKEND_API_VERSION_MAJOR) + "." +
+         std::to_string(TRITONBACKEND_API_VERSION_MINOR))
+            .c_str());
+  }
+
+  return nullptr;  // success
+}
+
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_Finalize(TRITONBACKEND_Backend* backend)
+{
+  return nullptr;  // success
+}
+
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInitialize(TRITONBACKEND_Model* model)
+{
+  const char* cname;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelName(model, &cname));
+  std::string name(cname);
+
+  uint64_t version;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelVersion(model, &version));
+
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("TRITONBACKEND_ModelInitialize: ") + name + " (version " +
+       std::to_string(version) + ")")
+          .c_str());
+
+  // Create a ModelState object and associate it with the
+  // TRITONBACKEND_Model.
+  ModelState* model_state;
+  RETURN_IF_ERROR(ModelState::Create(model, &model_state));
+  RETURN_IF_ERROR(
+      TRITONBACKEND_ModelSetState(model, reinterpret_cast<void*>(model_state)));
+
+  return nullptr;  // success
+}
+
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelFinalize(TRITONBACKEND_Model* model)
+{
+  void* vstate;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelState(model, &vstate));
+  ModelState* model_state = reinterpret_cast<ModelState*>(vstate);
+
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO, "TRITONBACKEND_ModelFinalize: delete model state");
+
+  delete model_state;
+
+  return nullptr;  // success
+}
+
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance)
+{
+  const char* cname;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceName(instance, &cname));
+  std::string name(cname);
+
+  int32_t device_id;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceDeviceId(instance, &device_id));
+  TRITONSERVER_InstanceGroupKind kind;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceKind(instance, &kind));
+
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      (std::string("TRITONBACKEND_ModelInstanceInitialize: ") + name + " (" +
+       TRITONSERVER_InstanceGroupKindString(kind) + " device " +
+       std::to_string(device_id) + ")")
+          .c_str());
+
+  // Get the model state associated with this instance's model.
+  TRITONBACKEND_Model* model;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceModel(instance, &model));
+
+  void* vmodelstate;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelState(model, &vmodelstate));
+  ModelState* model_state = reinterpret_cast<ModelState*>(vmodelstate);
+
+  // Create a ModelInstanceState object and associate it with the
+  // TRITONBACKEND_ModelInstance.
+  ModelInstanceState* instance_state;
+  RETURN_IF_ERROR(
+      ModelInstanceState::Create(model_state, instance, &instance_state));
+  RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceSetState(
+      instance, reinterpret_cast<void*>(instance_state)));
+
+  return nullptr;  // success
+}
+
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance)
+{
+  void* vstate;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceState(instance, &vstate));
+  ModelInstanceState* instance_state =
+      reinterpret_cast<ModelInstanceState*>(vstate);
+
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_INFO,
+      "TRITONBACKEND_ModelInstanceFinalize: delete instance state");
+
+  delete instance_state;
+
+  return nullptr;  // success
+}
+
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceExecute(
+    TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
+    const uint32_t request_count)
+{
+  // Triton will not call this function simultaneously for the same
+  // 'instance'. But since this backend could be used by multiple
+  // instances from multiple models the implementation needs to handle
+  // multiple calls to this function at the same time (with different
+  // 'instance' objects). Suggested practice for this is to use only
+  // function-local and model-instance-specific state (obtained from
+  // 'instance'), which is what we do here.
+  ModelInstanceState* instance_state;
+  RETURN_IF_ERROR(TRITONBACKEND_ModelInstanceState(
+      instance, reinterpret_cast<void**>(&instance_state)));
+  ModelState* model_state = instance_state->StateForModel();
+
+  // This backend specifies BLOCKING execution policy. That means that
+  // we should not return from this function until execution is
+  // complete. Triton will automatically release 'instance' on return
+  // from this function so that it is again available to be used for
+  // another call to TRITONBACKEND_ModelInstanceExecute.
+
+  LOG_MESSAGE(
+      TRITONSERVER_LOG_VERBOSE,
+      (std::string("model ") + model_state->Name() + ", instance " +
+       instance_state->Name() + ", executing " + std::to_string(request_count) +
+       " requests")
+          .c_str());
+
+  // At this point we accept ownership of 'requests', which means that
+  // even if something goes wrong we must still return success from
+  // this function. If something does go wrong in processing a
+  // particular request then we send an error response just for the
+  // specific request.
+  instance_state->ProcessRequests(requests, request_count);
+
+  return nullptr;  // success
+}
+
+}  // extern "C"
 
 }}}  // namespace triton::backend::openppl

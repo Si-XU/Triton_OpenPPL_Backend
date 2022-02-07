@@ -27,11 +27,16 @@
 #pragma once
 
 #include "ppl/nn/models/onnx/onnx_runtime_builder_factory.h"
+#include "ppl/nn/engines/cuda/cuda_engine_options.h"
 #include "ppl/nn/engines/cuda/cuda_options.h"
+#include "ppl/nn/engines/cuda/engine_factory.h"
 #include "ppl/nn/common/logger.h"
 #include <set>
 #include <string>
 #include <vector>
+#include <fstream>
+#include <sstream>
+#include <iostream>
 #include <functional>
 #include "triton/backend/backend_common.h"
 #include "triton/core/tritonserver.h"
@@ -42,91 +47,17 @@ namespace triton { namespace backend { namespace openppl {
 
 extern const unique_ptr<ppl::nn::Runtime> runtime;
 
-#define RETURN_IF_ORT_ERROR(S, message)                                           \
-  do {                                                                            \
-    auto status__ = (S);                                                          \
-    if (status__ != ppl::common::RC_SUCCESS) {                                    \
-      return TRITONSERVER_ErrorNew(                                               \
-          TRITONSERVER_ERROR_INTERNAL, (Message + " " + GetRetCodeStr(status)));  \
-    }                                                                             \
-  } while (false)
+ppl::common::RetCode ReadFileContent(const char* fname, string* buf);
 
-static const char* MemMem(const char* haystack, unsigned int haystack_len, const char* needle,
-                          unsigned int needle_len) {
-    if (!haystack || haystack_len == 0 || !needle || needle_len == 0) {
-        return nullptr;
-    }
+const char* MemMem(const char* haystack, unsigned int haystack_len, const char* needle, unsigned int needle_len);
 
-    for (auto h = haystack; haystack_len >= needle_len; ++h, --haystack_len) {
-        if (memcmp(h, needle, needle_len) == 0) {
-            return h;
-        }
-    }
-    return nullptr;
-}
+void SplitString(const char* str, unsigned int len, const char* delim, unsigned int delim_len,
+                        const function<bool(const char* s, unsigned int l)>& f);
 
-static void SplitString(const char* str, unsigned int len, const char* delim, unsigned int delim_len,
-                        const function<bool(const char* s, unsigned int l)>& f) {
-    const char* end = str + len;
+bool ParseInputShapes(const string& shape_str, vector<vector<int64_t>>* input_shapes);
 
-    while (str < end) {
-        auto cursor = MemMem(str, len, delim, delim_len);
-        if (!cursor) {
-            f(str, end - str);
-            return;
-        }
+TRITONSERVER_DataType ConvertFromOpenPPLDataType(ppl::common::datatype_t data_type);
 
-        if (!f(str, cursor - str)) {
-            return;
-        }
-
-        cursor += delim_len;
-        str = cursor;
-        len = end - cursor;
-    }
-
-    f("", 0); // the last empty field
-}
-
-static bool ParseInputShapes(const string& shape_str, vector<vector<int64_t>>* input_shapes) {
-    bool ok = true;
-
-    vector<string> input_shape_list;
-    SplitString(shape_str.data(), shape_str.size(), ",", 1,
-                [&ok, &input_shape_list](const char* s, unsigned int l) -> bool {
-                    if (l > 0) {
-                        input_shape_list.emplace_back(s, l);
-                        return true;
-                    }
-                    LOG(ERROR) << "empty shape in option '--input-shapes'";
-                    ok = false;
-                    return false;
-                });
-    if (!ok) {
-        return false;
-    }
-
-    for (auto x = input_shape_list.begin(); x != input_shape_list.end(); ++x) {
-        ok = true;
-        vector<int64_t> shape;
-        SplitString(x->data(), x->size(), "_", 1, [&ok, &shape](const char* s, unsigned int l) -> bool {
-            if (l > 0) {
-                int64_t dim = atol(string(s, l).c_str());
-                shape.push_back(dim);
-                return true;
-            }
-            LOG(ERROR) << "illegal dim format.";
-            ok = false;
-            return false;
-        });
-        if (!ok) {
-            return false;
-        }
-
-        input_shapes->push_back(shape);
-    }
-
-    return true;
-}
+ppl::common::datatype_t ConvertToOpenPPLDataType(TRITONSERVER_DataType data_type);
 
 }}}  // namespace triton::backend::openppl
