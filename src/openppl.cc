@@ -237,8 +237,7 @@ ModelInstanceState::ModelInstanceState(
         for (uint32_t i = 0; i < engines.size(); ++i) {
             engine_ptrs[i] = engines[i].get();
         }
-        auto builder = unique_ptr<RuntimeBuilder>(
-            OnnxRuntimeBuilderFactory::Create(g_flag_onnx_model.c_str(), engine_ptrs.data(), engine_ptrs.size()));
+        auto builder = unique_ptr<OnnxRuntimeBuilder>(OnnxRuntimeBuilderFactory::Create());
         if (!builder) {
             throw BackendModelException(TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INVALID_ARG, ("Init builder fail.")));
