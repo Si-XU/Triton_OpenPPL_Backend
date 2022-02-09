@@ -1,3 +1,29 @@
+# Copyright 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#  * Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#  * Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#  * Neither the name of NVIDIA CORPORATION nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 cmake_minimum_required(VERSION 3.17)
 
 project(tritonopenpplbackend LANGUAGES C CXX)
@@ -13,21 +39,16 @@ option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 
 # variables
 
-set(TRITON_BUILD_CONTAINER "" CACHE STRING "Triton container to use a base for build")
-set(TRITON_BUILD_CONTAINER_VERSION "" CACHE STRING "Triton container version to target")
-set(TRITON_BUILD_OPENPPL_VERSION "" CACHE STRING "OpenPPL version to build")
-set(TRITON_BUILD_CUDA_VERSION "" CACHE STRING "Version of CUDA install")
-set(TRITON_BUILD_CUDA_HOME "" CACHE PATH "Path to CUDA install")
-set(TRITON_BUILD_CUDNN_HOME "" CACHE PATH "Path to CUDNN install")
-set(TRITON_BUILD_TENSORRT_HOME "" CACHE PATH "Path to TensorRT install")
-set(TRITON_ONNX_TENSORRT_REPO_TAG "" CACHE STRING "Tag for onnx-tensorrt repo")
-set(TRT_VERSION "" CACHE STRING "TRT version for this build.")
-set(TRITON_OPENPPL_LIB_PATHS "" CACHE PATH "Paths to OpenPPL libraries")
+set(TRITON_OPENPPL_LIB_PATHS "" CACHE PATH "Paths to OpenPPL libraries. Multiple paths may be specified by separating them with a semicolon.")
+set(TRITON_OPENPPL_INCLUDE_PATHS "" CACHE PATH "Paths to OpenPPL includes. Multiple paths may be specified by separating them with a semicolon.")
 
-set(TRITON_BACKEND_REPO_TAG "r21.12" CACHE STRING "Tag for triton-inference-server/backend repo")
-set(TRITON_CORE_REPO_TAG "r21.12" CACHE STRING "Tag for triton-inference-server/core repo")
-set(TRITON_COMMON_REPO_TAG "r21.12" CACHE STRING "Tag for triton-inference-server/common repo")
+set(TRITON_BACKEND_REPO_TAG "r21.12" CACHE STRING "Tag for triton-inference-server/backend repo.")
+set(TRITON_CORE_REPO_TAG "r21.12" CACHE STRING "Tag for triton-inference-server/core repo.")
+set(TRITON_COMMON_REPO_TAG "r21.12" CACHE STRING "Tag for triton-inference-server/common repo.")
 set(OPENPPL_REPO_TAG "r21.12" CACHE STRING "Tag for openppl repo")
+
+set(TRITON_OPENPPL_BACKEND_LIBNAME triton_openppl)
+set(TRITON_OPENPPL_BACKEND_INSTALLDIR ${CMAKE_INSTALL_PREFIX}/backends/openppl)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -76,6 +97,10 @@ FetchContent_MakeAvailable(openppl)
 #
 if(${TRITON_ENABLE_GPU})
   find_package(CUDAToolkit REQUIRED)
+  message(STATUS "Using CUDA ${CUDA_VERSION}")
+  set(CUDA_NVCC_FLAGS -std=c++11)
+else()
+  message( FATAL_ERROR "OpenPPL backend requires TRITON_ENABLE_GPU=1, CMake will exit." )
 endif() # TRITON_ENABLE_GPU
 
 #
@@ -99,28 +124,24 @@ target_include_directories(
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${PPLNN_INCLUDE_DIRECTORIES}
+    ${TRITON_OPENPPL_INCLUDE_PATHS}
 )
 
 target_compile_features(triton-openppl-backend PRIVATE cxx_std_11)
 target_compile_options(
   triton-openppl-backend PRIVATE
   $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
-    -Wall -Wextra -Wno-unused-parameter -Wno-type-limits -Werror>
+    -Wall -Wextra -Wno-unused-parameter -Wno-type-limits -Werror -Wno-deprecated-declarations>
   $<$<CXX_COMPILER_ID:MSVC>:/Wall /D_WIN32_WINNT=0x0A00 /EHsc>
 )
 
-if(${TRITON_ENABLE_GPU})
-  target_compile_definitions(
+# C/C++ defines that are used directly by this backend.
+if (${TRITON_ENABLE_GPU})
+target_compile_definitions(
     triton-openppl-backend
     PRIVATE TRITON_ENABLE_GPU=1
-  )
+)
 endif() # TRITON_ENABLE_GPU
-if(${TRITON_ENABLE_OPENPPL_TENSORRT})
-  target_compile_definitions(
-    triton-openppl-backend
-    PRIVATE TRITON_ENABLE_OPENPPL_TENSORRT=1
-  )
-endif() # TRITON_ENABLE_OPENPPL_TENSORRT
 
 
 FOREACH(p ${TRITON_OPENPPL_LIB_PATHS})
@@ -140,28 +161,41 @@ target_link_libraries(
     pplnn_static            # add openppl lib path
 )
 
-if(${TRITON_ENABLE_GPU})
-  target_link_libraries(
+target_link_libraries(
+    triton-openppl-backend
+    PRIVATE ${TRITON_OPENPPL_LDFLAGS}
+)
+
+target_link_libraries(
     triton-openppl-backend
     PRIVATE
       CUDA::cudart
-  )
-endif() # TRITON_ENABLE_GPU
+)
 
 
 if(WIN32)
   set_target_properties(
-    triton-openppl-backend PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-    OUTPUT_NAME triton_openppl
+    triton-openppl-backend
+    PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      OUTPUT_NAME ${TRITON_OPENPPL_BACKEND_LIBNAME}
+      SKIP_BUILD_RPATH TRUE
+      BUILD_WITH_INSTALL_RPATH TRUE
+      INSTALL_RPATH_USE_LINK_PATH FALSE
+      INSTALL_RPATH "$\{ORIGIN\}"
   )
-else()
+else ()
   set_target_properties(
-    triton-openppl-backend PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-    OUTPUT_NAME triton_openppl
-    LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtriton_openppl.ldscript
-    LINK_FLAGS "-Wl,--version-script libtriton_openppl.ldscript"
+    triton-openppl-backend 
+    PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      OUTPUT_NAME ${TRITON_OPENPPL_BACKEND_LIBNAME}
+      SKIP_BUILD_RPATH TRUE
+      BUILD_WITH_INSTALL_RPATH TRUE
+      INSTALL_RPATH_USE_LINK_PATH FALSE
+      INSTALL_RPATH "$\{ORIGIN\}"
+      LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtriton_openppl.ldscript
+      LINK_FLAGS "-Wl,--version-script libtriton_openppl.ldscript"
   )
 endif()
 
@@ -171,14 +205,25 @@ endif()
 include(GNUInstallDirs)
 set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonOpenPPLBackend)
 
-install(
-  TARGETS
-    triton-openppl-backend
-  EXPORT
-    triton-openppl-backend-targets
-  LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openppl
-  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/backends/openppl
-)
+if (NOT WIN32)
+  install(
+    TARGETS
+      triton-openppl-backend
+    EXPORT
+      triton-openppl-backend-targets
+    LIBRARY DESTINATION ${TRITON_OPENPPL_BACKEND_INSTALLDIR}
+    ARCHIVE DESTINATION ${TRITON_OPENPPL_BACKEND_INSTALLDIR}
+  )
+else()
+  install(
+    TARGETS
+      triton-openppl-backend
+    EXPORT
+      triton-openppl-backend-targets
+    RUNTIME DESTINATION ${TRITON_OPENPPL_BACKEND_INSTALLDIR}
+    ARCHIVE DESTINATION ${TRITON_OPENPPL_BACKEND_INSTALLDIR}
+  )
+endif() # WIN32
 
 install(
   EXPORT
