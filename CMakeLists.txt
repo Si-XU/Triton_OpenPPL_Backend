@@ -195,7 +195,7 @@ else ()
       INSTALL_RPATH_USE_LINK_PATH FALSE
       INSTALL_RPATH "$\{ORIGIN\}"
       LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtriton_openppl.ldscript
-      LINK_FLAGS "-Wl,--version-script libtriton_openppl.ldscript"
+      LINK_FLAGS "-Wl,--export-dynamic,-rdynamic,--version-script libtriton_openppl.ldscript"
   )
 endif()
 
