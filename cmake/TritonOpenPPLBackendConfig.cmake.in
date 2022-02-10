@@ -32,8 +32,8 @@ get_filename_component(
 
 list(APPEND CMAKE_MODULE_PATH ${TRITONOPENPPLBACKEND_CMAKE_DIR})
 
-if(NOT TARGET TritonOpenpplBackend::triton-openppl-backend)
-  include("${TRITONOPENPPLBACKEND_CMAKE_DIR}/TritonOpenpplBackendTargets.cmake")
+if(NOT TARGET TritonOpenPPLBackend::triton-openppl-backend)
+  include("${TRITONOPENPPLBACKEND_CMAKE_DIR}/TritonOpenPPLBackendTargets.cmake")
 endif()
 
-set(TRITONOPENPPLBACKEND_LIBRARIES TritonOpenpplBackend::triton-openppl-backend)
+set(TRITONOPENPPLBACKEND_LIBRARIES TritonOpenPPLBackend::triton-openppl-backend)
