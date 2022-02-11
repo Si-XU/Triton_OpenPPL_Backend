@@ -183,7 +183,6 @@ class ModelInstanceState : public BackendModelInstance {
       std::vector<TRITONBACKEND_Response*>* responses);
 
   ModelState* model_state_;
-  std::string model_path_;
 
   // Store input and output openppl tensers for all requests
   uint32_t input_count_ = 0;
@@ -191,6 +190,7 @@ class ModelInstanceState : public BackendModelInstance {
   std::vector<std::map<std::string, Tensor*>> input_tensors_;
   std::vector<std::map<std::string, Tensor*>> output_tensors_;
   unique_ptr<Runtime> runtime_;
+  vector<unique_ptr<Engine>> engines_;
 
 };
 
@@ -217,10 +217,9 @@ ModelInstanceState::ModelInstanceState(
     : BackendModelInstance(model_state, triton_model_instance),
       model_state_(model_state)
 {
-  vector<unique_ptr<Engine>> engines;
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     try {
-      RegisterCudaEngine(&engines);
+      RegisterCudaEngine(&engines_);
     }
     catch (const BackendModelInstanceException& ex) {
       throw BackendModelException(TRITONSERVER_ErrorNew(
@@ -234,9 +233,9 @@ ModelInstanceState::ModelInstanceState(
   string version = std::to_string(model_state_->Version());
   string g_flag_onnx_model = model_state_->RepositoryPath() + "/" + version + "/model.onnx";
   LOG(INFO) << "begin to read onnx-model" << g_flag_onnx_model;
-  vector<Engine*> engine_ptrs(engines.size());
-  for (uint32_t i = 0; i < engines.size(); ++i) {
-      engine_ptrs[i] = engines[i].get();
+  vector<Engine*> engine_ptrs(engines_.size());
+  for (uint32_t i = 0; i < engines_.size(); ++i) {
+      engine_ptrs[i] = engines_[i].get();
   }
 
   auto builder = unique_ptr<OnnxRuntimeBuilder>(OnnxRuntimeBuilderFactory::Create());
