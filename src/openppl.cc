@@ -231,37 +231,40 @@ ModelInstanceState::ModelInstanceState(
         TRITONSERVER_ERROR_UNSUPPORTED, ("Only support GPU. Unsupport engine type input.")));
   }
 
-  LOG(INFO) << "finish register cuda engine";
+  string g_flag_onnx_model = model_state_->RepositoryPath();
+  LOG(INFO) << "begin to read onnx-model" << g_flag_onnx_model;
+  vector<Engine*> engine_ptrs(engines.size());
+  for (uint32_t i = 0; i < engines.size(); ++i) {
+      engine_ptrs[i] = engines[i].get();
+  }
 
-  triton::common::TritonJson::Value param;
-  if (model_state_->ModelConfig().Find("params", &param)) {
-    LOG(INFO) << "begin to read onnx-model";
-    string g_flag_onnx_model;
-    param.MemberAsString("onnx-model", &g_flag_onnx_model);
-    if (!g_flag_onnx_model.empty()) {
-        vector<Engine*> engine_ptrs(engines.size());
-        for (uint32_t i = 0; i < engines.size(); ++i) {
-            engine_ptrs[i] = engines[i].get();
-        }
-        auto builder = unique_ptr<OnnxRuntimeBuilder>(OnnxRuntimeBuilderFactory::Create());
-        if (!builder) {
-            LOG(ERROR) << "Init builder fail.";
-            throw BackendModelException(TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INVALID_ARG, ("Init builder fail.")));
-        }
-
-        runtime_.reset(builder->CreateRuntime());
-    }  
-    
-    if (!runtime_) {
-      LOG(ERROR) << "Init runtime fail.";
+  auto builder = unique_ptr<OnnxRuntimeBuilder>(OnnxRuntimeBuilderFactory::Create());
+  if (!builder) {
+      LOG(ERROR) << "create RuntimeBuilder failed.";
       throw BackendModelException(TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INTERNAL, ("Init runtime fail.")));
-    }
-  } else {
-    LOG(ERROR) << "Read params fail.";
+        TRITONSERVER_ERROR_INVALID_ARG, ("create RuntimeBuilder failed.")));
+  }
+
+  auto status = builder->Init(g_flag_onnx_model.c_str(), engine_ptrs.data(), engine_ptrs.size());
+  if (status != RC_SUCCESS) {
+      LOG(ERROR) << "create OnnxRuntimeBuilder failed: " << GetRetCodeStr(status);
+      throw BackendModelException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, ("create OnnxRuntimeBuilder failed.")));
+  }
+
+  status = builder->Preprocess();
+  if (status != RC_SUCCESS) {
+      LOG(ERROR) << "onnx preprocess failed: " << GetRetCodeStr(status);
+      throw BackendModelException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, ("onnx preprocess failed: ")));
+  }
+
+  runtime_.reset(builder->CreateRuntime());
+  
+  if (!runtime_) {
+    LOG(ERROR) << "Init runtime fail.";
     throw BackendModelException(TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG, ("Read params fail.")));
+      TRITONSERVER_ERROR_INTERNAL, ("Init runtime fail.")));
   }
 }
 
@@ -272,7 +275,7 @@ ModelInstanceState::RegisterCudaEngine(vector<unique_ptr<Engine>> *engines)
   options.device_id = DeviceId();
 
   triton::common::TritonJson::Value param;
-  if (model_state_->ModelConfig().Find("params", &param)) {
+  if (model_state_->ModelConfig().Find("paramters", &param)) {
     string policy;
     param.MemberAsString("mm-policy", &policy);
     if (policy == "perf") {
