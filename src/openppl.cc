@@ -231,7 +231,8 @@ ModelInstanceState::ModelInstanceState(
         TRITONSERVER_ERROR_UNSUPPORTED, ("Only support GPU. Unsupport engine type input.")));
   }
 
-  string g_flag_onnx_model = model_state_->RepositoryPath();
+  string version = std::to_string(model_state_->Version());
+  string g_flag_onnx_model = model_state_->RepositoryPath() + "/" + model_state_->Name() + "/" + version + "/model.onnx";
   LOG(INFO) << "begin to read onnx-model" << g_flag_onnx_model;
   vector<Engine*> engine_ptrs(engines.size());
   for (uint32_t i = 0; i < engines.size(); ++i) {
