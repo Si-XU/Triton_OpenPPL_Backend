@@ -153,7 +153,7 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance,
       ModelInstanceState** state);
-  virtual ~ModelInstanceState() {};
+  virtual ~ModelInstanceState() = default;
 
   // Execute...
   void ProcessRequests(
@@ -348,8 +348,11 @@ ModelInstanceState::RegisterCudaEngine(vector<unique_ptr<Engine>> *engines)
   //     }
   // }
 
+  // TODO: Use quick select for test
+  cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, true);
+
   // pass input shapes to cuda engine for further optimizations
-  string g_flag_input_shapes = "1_3_224_224";
+  string g_flag_input_shapes = "1_3_224_224"; // TODO: use input dims
   if (!g_flag_input_shapes.empty()) {
       vector<vector<int64_t>> input_shapes;
       if (!ParseInputShapes(g_flag_input_shapes, &input_shapes)) {
