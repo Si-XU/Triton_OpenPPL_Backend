@@ -34,6 +34,7 @@ project(tritonopenpplbackend LANGUAGES C CXX)
 
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
+option(HPCC_USE_CUDA "Use for OpenPPL cmake option" ON)
 
 # --------------------------------------------------------------------------- #
 

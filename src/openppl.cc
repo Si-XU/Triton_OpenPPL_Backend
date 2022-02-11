@@ -153,7 +153,7 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance,
       ModelInstanceState** state);
-  virtual ~ModelInstanceState();
+  virtual ~ModelInstanceState() {};
 
   // Execute...
   void ProcessRequests(
