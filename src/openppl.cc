@@ -231,8 +231,11 @@ ModelInstanceState::ModelInstanceState(
         TRITONSERVER_ERROR_UNSUPPORTED, ("Only support GPU. Unsupport engine type input.")));
   }
 
+  LOG(INFO) << "finish register cuda engine";
+
   triton::common::TritonJson::Value param;
   if (model_state_->ModelConfig().Find("params", &param)) {
+    LOG(INFO) << "begin to read onnx-model";
     string g_flag_onnx_model;
     param.MemberAsString("onnx-model", &g_flag_onnx_model);
     if (!g_flag_onnx_model.empty()) {
@@ -242,6 +245,7 @@ ModelInstanceState::ModelInstanceState(
         }
         auto builder = unique_ptr<OnnxRuntimeBuilder>(OnnxRuntimeBuilderFactory::Create());
         if (!builder) {
+            LOG(ERROR) << "Init builder fail.";
             throw BackendModelException(TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INVALID_ARG, ("Init builder fail.")));
         }
@@ -250,10 +254,12 @@ ModelInstanceState::ModelInstanceState(
     }  
     
     if (!runtime_) {
+      LOG(ERROR) << "Init runtime fail.";
       throw BackendModelException(TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL, ("Init runtime fail.")));
     }
   } else {
+    LOG(ERROR) << "Read params fail.";
     throw BackendModelException(TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, ("Read params fail.")));
   }
