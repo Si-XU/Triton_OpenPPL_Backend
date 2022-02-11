@@ -273,89 +273,82 @@ ModelInstanceState::RegisterCudaEngine(vector<unique_ptr<Engine>> *engines)
 {
   CudaEngineOptions options;
   options.device_id = DeviceId();
-
-  triton::common::TritonJson::Value param;
-  if (model_state_->ModelConfig().Find("paramters", &param)) {
-    string policy;
-    param.MemberAsString("mm-policy", &policy);
-    if (policy == "perf") {
-        options.mm_policy = CUDA_MM_BEST_FIT;
-    } else if (policy == "mem") {
-        options.mm_policy = CUDA_MM_COMPACT;
-    }
-  }
-
+  options.mm_policy = CUDA_MM_BEST_FIT;
   auto cuda_engine = CudaEngineFactory::Create(options);
-  if (!cuda_engine) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL, ("invalid cuda engine"));
-  }
 
-  int64_t g_flag_quick_select = 0;
-  param.MemberAsInt("quick-select", &g_flag_quick_select);
-  cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, (bool)g_flag_quick_select);
+  // triton::common::TritonJson::Value param;
+  // if (model_state_->ModelConfig().Find("paramters", &param)) {
+  //     auto cuda_engine = CudaEngineFactory::Create(options);
+  //     if (!cuda_engine) {
+  //         return TRITONSERVER_ErrorNew(
+  //             TRITONSERVER_ERROR_INTERNAL, ("invalid cuda engine"));
+  //     }
 
-  std::string g_flag_kernel_type;
-  param.MemberAsString("kerne-type", &g_flag_kernel_type);
-  if (!g_flag_kernel_type.empty()) {
-      string kernel_type_str(g_flag_kernel_type);
+  //     int64_t g_flag_quick_select = 0;
+  //     param.MemberAsInt("quick-select", &g_flag_quick_select);
+  //     cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, (bool)g_flag_quick_select);
 
-      datatype_t kernel_type = DATATYPE_UNKNOWN;
-      for (datatype_t i = DATATYPE_UNKNOWN; i < DATATYPE_MAX; i++) {
-          if (GetDataTypeStr(i) == kernel_type_str) {
-              kernel_type = i;
-              break;
-          }
-      }
+  //     std::string g_flag_kernel_type;
+  //     param.MemberAsString("kerne-type", &g_flag_kernel_type);
+  //     if (!g_flag_kernel_type.empty()) {
+  //         string kernel_type_str(g_flag_kernel_type);
 
-      if (kernel_type != DATATYPE_UNKNOWN) {
-        cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_KERNEL_TYPE, kernel_type);
-      } else {
-        string message = "invalid kernel type[" + g_flag_kernel_type + "]. valid values: int8/16/32/64,float16/32.";
-        return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INTERNAL, message.data());
-      }
-  }
+  //         datatype_t kernel_type = DATATYPE_UNKNOWN;
+  //         for (datatype_t i = DATATYPE_UNKNOWN; i < DATATYPE_MAX; i++) {
+  //             if (GetDataTypeStr(i) == kernel_type_str) {
+  //                 kernel_type = i;
+  //                 break;
+  //             }
+  //         }
 
-  string g_flag_quant_file;
-  param.MemberAsString("quant-file", &g_flag_quant_file);
-  if (!g_flag_quant_file.empty()) {
-      string file_content;
-      auto status = ReadFileContent(g_flag_quant_file.c_str(), &file_content);
-      if (status != RC_SUCCESS) {
-        string message = "invalid quant file path[" + g_flag_kernel_type + "].";
-        return TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_INTERNAL, message.data());
-      }
-      cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_QUANT_INFO, file_content.c_str());
-  }
+  //         if (kernel_type != DATATYPE_UNKNOWN) {
+  //           cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_KERNEL_TYPE, kernel_type);
+  //         } else {
+  //           string message = "invalid kernel type[" + g_flag_kernel_type + "]. valid values: int8/16/32/64,float16/32.";
+  //           return TRITONSERVER_ErrorNew(
+  //             TRITONSERVER_ERROR_INTERNAL, message.data());
+  //         }
+  //     }
 
-  string g_flag_export_algo_file;
-  param.MemberAsString("export-algo-file", &g_flag_export_algo_file);
-  if (!g_flag_export_algo_file.empty()) {
-      cuda_engine->Configure(ppl::nn::CUDA_CONF_EXPORT_ALGORITHMS, g_flag_export_algo_file.c_str());
-  }
+  //     string g_flag_quant_file;
+  //     param.MemberAsString("quant-file", &g_flag_quant_file);
+  //     if (!g_flag_quant_file.empty()) {
+  //         string file_content;
+  //         auto status = ReadFileContent(g_flag_quant_file.c_str(), &file_content);
+  //         if (status != RC_SUCCESS) {
+  //           string message = "invalid quant file path[" + g_flag_kernel_type + "].";
+  //           return TRITONSERVER_ErrorNew(
+  //               TRITONSERVER_ERROR_INTERNAL, message.data());
+  //         }
+  //         cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_QUANT_INFO, file_content.c_str());
+  //     }
 
-  string g_flag_import_algo_file;
-  param.MemberAsString("import-algo-file", &g_flag_import_algo_file);  
-  if (!g_flag_import_algo_file.empty()) {
-      // import and export from the same file
-      if (g_flag_import_algo_file == g_flag_export_algo_file) {
-          // try to create this file first
-          ofstream ofs(g_flag_export_algo_file, ios_base::app);
-          if (!ofs.is_open()) {
-            string message = "invalid algo file path[" + g_flag_import_algo_file + "].";
-            return TRITONSERVER_ErrorNew(
-                TRITONSERVER_ERROR_INTERNAL, message.data());
-          }
-          ofs.close();
-      }
-      cuda_engine->Configure(ppl::nn::CUDA_CONF_IMPORT_ALGORITHMS, g_flag_import_algo_file.c_str());
-  }
+  //     string g_flag_export_algo_file;
+  //     param.MemberAsString("export-algo-file", &g_flag_export_algo_file);
+  //     if (!g_flag_export_algo_file.empty()) {
+  //         cuda_engine->Configure(ppl::nn::CUDA_CONF_EXPORT_ALGORITHMS, g_flag_export_algo_file.c_str());
+  //     }
+
+  //     string g_flag_import_algo_file;
+  //     param.MemberAsString("import-algo-file", &g_flag_import_algo_file);  
+  //     if (!g_flag_import_algo_file.empty()) {
+  //         // import and export from the same file
+  //         if (g_flag_import_algo_file == g_flag_export_algo_file) {
+  //             // try to create this file first
+  //             ofstream ofs(g_flag_export_algo_file, ios_base::app);
+  //             if (!ofs.is_open()) {
+  //               string message = "invalid algo file path[" + g_flag_import_algo_file + "].";
+  //               return TRITONSERVER_ErrorNew(
+  //                   TRITONSERVER_ERROR_INTERNAL, message.data());
+  //             }
+  //             ofs.close();
+  //         }
+  //         cuda_engine->Configure(ppl::nn::CUDA_CONF_IMPORT_ALGORITHMS, g_flag_import_algo_file.c_str());
+  //     }
+  // }
 
   // pass input shapes to cuda engine for further optimizations
-  string g_flag_input_shapes;
-  param.MemberAsString("input-shapes", &g_flag_input_shapes);  
+  string g_flag_input_shapes = "1_3_224_224";
   if (!g_flag_input_shapes.empty()) {
       vector<vector<int64_t>> input_shapes;
       if (!ParseInputShapes(g_flag_input_shapes, &input_shapes)) {
