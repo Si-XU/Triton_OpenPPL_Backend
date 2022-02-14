@@ -153,11 +153,13 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance,
       ModelInstanceState** state);
-  virtual ~ModelInstanceState() {
+  ~ModelInstanceState() override {
+      LOG(ERROR) << "Begin to deconstruct ModelInstanceState";
       for (uint32_t i = 0; i < engines_.size(); ++i) {
           Engine* engine = engines_[i].get();
           delete engine;
       }
+      delete runtime_.get();
   };
 
   // Execute...
@@ -233,7 +235,7 @@ ModelInstanceState::ModelInstanceState(
 
   string version = std::to_string(model_state_->Version());
   string g_flag_onnx_model = model_state_->RepositoryPath() + "/" + version + "/model.onnx";
-  LOG(INFO) << "begin to read onnx-model" << g_flag_onnx_model;
+  LOG(INFO) << "begin to read onnx-model: " << g_flag_onnx_model;
   vector<Engine*> engine_ptrs(engines_.size());
   for (uint32_t i = 0; i < engines_.size(); ++i) {
       engine_ptrs[i] = engines_[i].get();
@@ -370,7 +372,7 @@ ModelInstanceState::RegisterCudaEngine(vector<unique_ptr<Engine>> *engines)
       cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_INPUT_DIMS, dims.data(), dims.size());
   }
 
-  engines->emplace_back(unique_ptr<Engine>(cuda_engine));
+  engines->emplace_back(unique_ptr<Engine>(std::move(cuda_engine)));
   LOG(INFO) << "***** register CudaEngine *****";
   return nullptr;
 }
