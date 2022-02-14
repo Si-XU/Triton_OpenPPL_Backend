@@ -234,13 +234,13 @@ ModelInstanceState::ModelInstanceState(
         TRITONSERVER_ERROR_UNSUPPORTED, ("Only support GPU. Unsupport engine type input.")));
   }
 
-  string version = std::to_string(model_state_->Version());
-  string g_flag_onnx_model = model_state_->RepositoryPath() + "/" + version + "/model.onnx";
-  LOG(INFO) << "begin to read onnx-model: " << g_flag_onnx_model;
-  vector<Engine*> engine_ptrs(engines_.size());
-  for (uint32_t i = 0; i < engines_.size(); ++i) {
-      engine_ptrs[i] = engines_[i].get();
-  }
+  // string version = std::to_string(model_state_->Version());
+  // string g_flag_onnx_model = model_state_->RepositoryPath() + "/" + version + "/model.onnx";
+  // LOG(INFO) << "begin to read onnx-model: " << g_flag_onnx_model;
+  // vector<Engine*> engine_ptrs(engines_.size());
+  // for (uint32_t i = 0; i < engines_.size(); ++i) {
+  //     engine_ptrs[i] = engines_[i].get();
+  // }
 
   // builder_.reset(OnnxRuntimeBuilderFactory::Create());
   // if (!builder_) {
@@ -373,7 +373,7 @@ ModelInstanceState::RegisterCudaEngine(vector<unique_ptr<Engine>> *engines)
       cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_INPUT_DIMS, dims.data(), dims.size());
   }
 
-  engines->emplace_back(unique_ptr<Engine>(std::move(cuda_engine)));
+  engines->emplace_back(unique_ptr<Engine>(cuda_engine));
   LOG(INFO) << "***** register CudaEngine *****";
   return nullptr;
 }
