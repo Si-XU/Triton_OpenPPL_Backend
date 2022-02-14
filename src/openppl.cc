@@ -153,7 +153,7 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance,
       ModelInstanceState** state);
-  ~ModelInstanceState() override {
+  virtual ~ModelInstanceState() override {
       LOG(ERROR) << "Begin to deconstruct ModelInstanceState";
       for (uint32_t i = 0; i < engines_.size(); ++i) {
           Engine* engine = engines_[i].get();
