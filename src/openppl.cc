@@ -242,12 +242,12 @@ ModelInstanceState::ModelInstanceState(
       engine_ptrs[i] = engines_[i].get();
   }
 
-  builder_.reset(OnnxRuntimeBuilderFactory::Create());
-  if (!builder_) {
-      LOG(ERROR) << "create RuntimeBuilder failed.";
-      throw BackendModelException(TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG, ("create RuntimeBuilder failed.")));
-  }
+  // builder_.reset(OnnxRuntimeBuilderFactory::Create());
+  // if (!builder_) {
+  //     LOG(ERROR) << "create RuntimeBuilder failed.";
+  //     throw BackendModelException(TRITONSERVER_ErrorNew(
+  //       TRITONSERVER_ERROR_INVALID_ARG, ("create RuntimeBuilder failed.")));
+  // }
 
   // auto status = builder_->Init(g_flag_onnx_model.c_str(), engine_ptrs.data(), engine_ptrs.size());
   // if (status != RC_SUCCESS) {
