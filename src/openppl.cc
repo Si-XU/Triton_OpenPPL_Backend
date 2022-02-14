@@ -187,6 +187,7 @@ class ModelInstanceState : public BackendModelInstance {
   ModelState* model_state_;
 
   // Store input and output openppl tensers for all requests
+  unique_ptr<OnnxRuntimeBuilder> builder_;
   unique_ptr<Runtime> runtime_;
   vector<unique_ptr<Engine>> engines_;
 
@@ -236,28 +237,28 @@ ModelInstanceState::ModelInstanceState(
       engine_ptrs[i] = engines_[i].get();
   }
 
-  auto builder = unique_ptr<OnnxRuntimeBuilder>(OnnxRuntimeBuilderFactory::Create());
-  if (!builder) {
+  builder_.reset(OnnxRuntimeBuilderFactory::Create());
+  if (!builder_) {
       LOG(ERROR) << "create RuntimeBuilder failed.";
       throw BackendModelException(TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, ("create RuntimeBuilder failed.")));
   }
 
-  auto status = builder->Init(g_flag_onnx_model.c_str(), engine_ptrs.data(), engine_ptrs.size());
+  auto status = builder_->Init(g_flag_onnx_model.c_str(), engine_ptrs.data(), engine_ptrs.size());
   if (status != RC_SUCCESS) {
       LOG(ERROR) << "create OnnxRuntimeBuilder failed: " << GetRetCodeStr(status);
       throw BackendModelException(TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, ("create OnnxRuntimeBuilder failed.")));
   }
 
-  status = builder->Preprocess();
+  status = builder_->Preprocess();
   if (status != RC_SUCCESS) {
       LOG(ERROR) << "onnx preprocess failed: " << GetRetCodeStr(status);
       throw BackendModelException(TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, ("onnx preprocess failed: ")));
   }
 
-  // runtime_.reset(builder->CreateRuntime());
+  runtime_.reset(builder_->CreateRuntime());
   
   if (!runtime_) {
     LOG(ERROR) << "Init runtime fail.";
