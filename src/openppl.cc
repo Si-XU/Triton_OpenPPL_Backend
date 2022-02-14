@@ -157,9 +157,9 @@ class ModelInstanceState : public BackendModelInstance {
       LOG(ERROR) << "Begin to deconstruct ModelInstanceState";
       delete runtime_.get();
       delete builder_.get();
-      for (uint32_t i = 0; i < engines_.size(); ++i) {
-          delete engines_[i].get();
-      }
+      // for (uint32_t i = 0; i < engines_.size(); ++i) {
+      //     delete engines_[i].get();
+      // }
   };
 
   // Execute...
@@ -373,7 +373,7 @@ ModelInstanceState::RegisterCudaEngine(vector<unique_ptr<Engine>> *engines)
       cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_INPUT_DIMS, dims.data(), dims.size());
   }
 
-  engines->emplace_back(unique_ptr<Engine>(std::move(cuda_engine)));
+  engines->emplace_back(unique_ptr<Engine>(cuda_engine));
   LOG(INFO) << "***** register CudaEngine *****";
   return nullptr;
 }
