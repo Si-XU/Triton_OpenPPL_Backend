@@ -153,7 +153,12 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance,
       ModelInstanceState** state);
-  virtual ~ModelInstanceState() = default;
+  virtual ~ModelInstanceState() {
+      for (uint32_t i = 0; i < engines_.size(); ++i) {
+          Engine* engine = engines_[i].get();
+          delete engine;
+      }
+  };
 
   // Execute...
   void ProcessRequests(
@@ -185,10 +190,6 @@ class ModelInstanceState : public BackendModelInstance {
   ModelState* model_state_;
 
   // Store input and output openppl tensers for all requests
-  uint32_t input_count_ = 0;
-  uint32_t output_count_ = 0;
-  std::vector<std::map<std::string, Tensor*>> input_tensors_;
-  std::vector<std::map<std::string, Tensor*>> output_tensors_;
   unique_ptr<Runtime> runtime_;
   vector<unique_ptr<Engine>> engines_;
 
