@@ -221,18 +221,18 @@ ModelInstanceState::ModelInstanceState(
     : BackendModelInstance(model_state, triton_model_instance),
       model_state_(model_state)
 {
-  // if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-  //   try {
-  //     RegisterCudaEngine(&engines_);
-  //   }
-  //   catch (const BackendModelInstanceException& ex) {
-  //     throw BackendModelException(TRITONSERVER_ErrorNew(
-  //         TRITONSERVER_ERROR_INVALID_ARG, ("Register cuda engine fail.")));
-  //   }
-  // } else { // Only support GPU right now
-  //   throw BackendModelException(TRITONSERVER_ErrorNew(
-  //       TRITONSERVER_ERROR_UNSUPPORTED, ("Only support GPU. Unsupport engine type input.")));
-  // }
+  if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+    try {
+      RegisterCudaEngine(&engines_);
+    }
+    catch (const BackendModelInstanceException& ex) {
+      throw BackendModelException(TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG, ("Register cuda engine fail.")));
+    }
+  } else { // Only support GPU right now
+    throw BackendModelException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_UNSUPPORTED, ("Only support GPU. Unsupport engine type input.")));
+  }
 
   // string version = std::to_string(model_state_->Version());
   // string g_flag_onnx_model = model_state_->RepositoryPath() + "/" + version + "/model.onnx";
@@ -373,7 +373,7 @@ ModelInstanceState::RegisterCudaEngine(vector<unique_ptr<Engine>> *engines)
       cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_INPUT_DIMS, dims.data(), dims.size());
   }
 
-  engines->emplace_back(unique_ptr<Engine>(cuda_engine));
+  // engines->emplace_back(unique_ptr<Engine>(cuda_engine));
   LOG(INFO) << "***** register CudaEngine *****";
   return nullptr;
 }
