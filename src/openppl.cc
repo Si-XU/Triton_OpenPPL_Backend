@@ -156,7 +156,7 @@ class ModelInstanceState : public BackendModelInstance {
   virtual ~ModelInstanceState() {
       LOG(ERROR) << "Begin to deconstruct ModelInstanceState";
       // delete runtime_.get();
-      // delete builder_.get();
+      delete builder_.get();
       // for (uint32_t i = 0; i < engines_.size(); ++i) {
       //     delete engines_[i].get();
       // }
@@ -257,12 +257,12 @@ ModelInstanceState::ModelInstanceState(
         TRITONSERVER_ERROR_INVALID_ARG, ("create OnnxRuntimeBuilder failed.")));
   }
 
-  // status = builder_->Preprocess();
-  // if (status != RC_SUCCESS) {
-  //     LOG(ERROR) << "onnx preprocess failed: " << GetRetCodeStr(status);
-  //     throw BackendModelException(TRITONSERVER_ErrorNew(
-  //       TRITONSERVER_ERROR_INVALID_ARG, ("onnx preprocess failed: ")));
-  // }
+  status = builder_->Preprocess();
+  if (status != RC_SUCCESS) {
+      LOG(ERROR) << "onnx preprocess failed: " << GetRetCodeStr(status);
+      throw BackendModelException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, ("onnx preprocess failed: ")));
+  }
 
   // runtime_.reset(builder_->CreateRuntime());
   
