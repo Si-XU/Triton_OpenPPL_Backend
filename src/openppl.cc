@@ -699,7 +699,7 @@ LOG(ERROR) << "broken here 1";
       TRITONSERVER_MEMORY_GPU, 2};
 LOG(ERROR) << "broken here 2";
   for (uint32_t i = 0; i < runtime_->GetOutputCount(); i++) {
-    auto ppl_tensor = runtime_->GetInputTensor(i);
+    auto ppl_tensor = runtime_->GetOutputTensor(i);
     auto ppl_shape = ppl_tensor->GetShape();
     auto name = ppl_tensor->GetName();
     // const BatchOutput* batch_output = model_state_->FindBatchOutput(name);
