@@ -705,10 +705,12 @@ LOG(ERROR) << "broken here 2";
     // const BatchOutput* batch_output = model_state_->FindBatchOutput(name);
 LOG(ERROR) << "broken here 3";
     TRITONSERVER_DataType dtype = ConvertFromOpenPPLDataType(ppl_shape->GetDataType());
-
+LOG(ERROR) << "broken here 3.1";
     std::vector<int64_t> batchn_shape;
-    for (uint32_t j = 0; j < ppl_shape->GetDimCount(); i++)
+    for (uint32_t j = 0; j < ppl_shape->GetDimCount(); j++) {
       batchn_shape.push_back(ppl_shape->GetDim(j));
+      LOG(ERROR) << batchn_shape[j];
+    }
 LOG(ERROR) << "broken here 4";    
     responder.ProcessTensor(
               name, dtype, batchn_shape, reinterpret_cast<char*>(ppl_tensor->GetBufferPtr()),
