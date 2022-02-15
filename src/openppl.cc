@@ -249,19 +249,19 @@ ModelInstanceState::ModelInstanceState(
         TRITONSERVER_ERROR_INVALID_ARG, ("create RuntimeBuilder failed.")));
   }
 
-  // auto status = builder_->Init(g_flag_onnx_model.c_str(), engine_ptrs.data(), engine_ptrs.size());
-  // if (status != RC_SUCCESS) {
-  //     LOG(ERROR) << "create OnnxRuntimeBuilder failed: " << GetRetCodeStr(status);
-  //     throw BackendModelException(TRITONSERVER_ErrorNew(
-  //       TRITONSERVER_ERROR_INVALID_ARG, ("create OnnxRuntimeBuilder failed.")));
-  // }
+  auto status = builder_->Init(g_flag_onnx_model.c_str(), engine_ptrs.data(), engine_ptrs.size());
+  if (status != RC_SUCCESS) {
+      LOG(ERROR) << "create OnnxRuntimeBuilder failed: " << GetRetCodeStr(status);
+      throw BackendModelException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, ("create OnnxRuntimeBuilder failed.")));
+  }
 
-  // status = builder_->Preprocess();
-  // if (status != RC_SUCCESS) {
-  //     LOG(ERROR) << "onnx preprocess failed: " << GetRetCodeStr(status);
-  //     throw BackendModelException(TRITONSERVER_ErrorNew(
-  //       TRITONSERVER_ERROR_INVALID_ARG, ("onnx preprocess failed: ")));
-  // }
+  status = builder_->Preprocess();
+  if (status != RC_SUCCESS) {
+      LOG(ERROR) << "onnx preprocess failed: " << GetRetCodeStr(status);
+      throw BackendModelException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, ("onnx preprocess failed: ")));
+  }
 
   // runtime_.reset(builder_->CreateRuntime());
   
