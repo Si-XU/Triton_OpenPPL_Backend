@@ -234,20 +234,20 @@ ModelInstanceState::ModelInstanceState(
         TRITONSERVER_ERROR_UNSUPPORTED, ("Only support GPU. Unsupport engine type input.")));
   }
 
-  // string version = std::to_string(model_state_->Version());
-  // string g_flag_onnx_model = model_state_->RepositoryPath() + "/" + version + "/model.onnx";
-  // LOG(INFO) << "begin to read onnx-model: " << g_flag_onnx_model;
-  // vector<Engine*> engine_ptrs(engines_.size());
-  // for (uint32_t i = 0; i < engines_.size(); ++i) {
-  //     engine_ptrs[i] = engines_[i].get();
-  // }
+  string version = std::to_string(model_state_->Version());
+  string g_flag_onnx_model = model_state_->RepositoryPath() + "/" + version + "/model.onnx";
+  LOG(INFO) << "begin to read onnx-model: " << g_flag_onnx_model;
+  vector<Engine*> engine_ptrs(engines_.size());
+  for (uint32_t i = 0; i < engines_.size(); ++i) {
+      engine_ptrs[i] = engines_[i].get();
+  }
 
-  // builder_.reset(OnnxRuntimeBuilderFactory::Create());
-  // if (!builder_) {
-  //     LOG(ERROR) << "create RuntimeBuilder failed.";
-  //     throw BackendModelException(TRITONSERVER_ErrorNew(
-  //       TRITONSERVER_ERROR_INVALID_ARG, ("create RuntimeBuilder failed.")));
-  // }
+  builder_.reset(OnnxRuntimeBuilderFactory::Create());
+  if (!builder_) {
+      LOG(ERROR) << "create RuntimeBuilder failed.";
+      throw BackendModelException(TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, ("create RuntimeBuilder failed.")));
+  }
 
   // auto status = builder_->Init(g_flag_onnx_model.c_str(), engine_ptrs.data(), engine_ptrs.size());
   // if (status != RC_SUCCESS) {
@@ -671,8 +671,9 @@ ModelInstanceState::OpenPPLRun(
   auto status = runtime_->Run();
   if (status != ppl::common::RC_SUCCESS) {
     LOG_MESSAGE(TRITONSERVER_LOG_INFO, "Run failed.");
+  } else {
+    LOG_MESSAGE(TRITONSERVER_LOG_INFO, "Run OK.");
   }
-  LOG_MESSAGE(TRITONSERVER_LOG_INFO, "Run OK.");
   return nullptr;
 }
 
