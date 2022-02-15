@@ -583,7 +583,7 @@ ModelInstanceState::SetInputTensors(
     TRITONBACKEND_Input* input;
     RETURN_IF_ERROR(
         TRITONBACKEND_RequestInputByIndex(requests[0], input_idx, &input));
-
+LOG(ERROR) << "broken here 1";
     const char* input_name;
     TRITONSERVER_DataType input_datatype;
     const int64_t* input_shape;
@@ -591,9 +591,9 @@ ModelInstanceState::SetInputTensors(
     RETURN_IF_ERROR(TRITONBACKEND_InputProperties(
         input, &input_name, &input_datatype, &input_shape, &input_dims_count,
         nullptr, nullptr));
-
+LOG(ERROR) << "broken here 2";
     input_names->emplace_back(input_name);
-
+LOG(ERROR) << "broken here 3";
     std::vector<int64_t> batchn_shape;
     // For a ragged input tensor, the tensor shape should be
     // the flatten shape of the whole batch
@@ -622,15 +622,20 @@ ModelInstanceState::SetInputTensors(
         batchn_shape[0] = total_batch_size;
       }
     }
-
+LOG(ERROR) << "broken here 4";
     std::vector<int64_t> input_dims = batchn_shape;
+LOG(ERROR) << "broken here 5";
     if (input_dims.size() == 1) {
-      for (size_t i = 0; i < input_dims_count; i++) {
+      for (size_t i = 1; i < input_dims_count; i++) {
         input_dims.push_back(input_shape[i]);
         LOG(INFO) << "input idx: " << input_idx << " has dims " << input_shape[i];
       }
+    } else {
+      for (size_t i = 0; i < input_dims_count; i++) {
+        LOG(INFO) << "input idx: " << input_idx << " has dims " << input_shape[i];
+      }
     }
-
+LOG(ERROR) << "broken here 6";
     // The input must be in contiguous CPU memory. Use appropriate
     // allocator info to bind inputs to the right device. .i.e bind inputs
     // to GPU if they are being provided on GPU.
@@ -648,11 +653,11 @@ ModelInstanceState::SetInputTensors(
       allowed_input_types = {{TRITONSERVER_MEMORY_CPU_PINNED, 0},
                               {TRITONSERVER_MEMORY_CPU, 0}};
     }
-
+LOG(ERROR) << "broken here 7";
     RETURN_IF_ERROR(collector->ProcessTensor(
         input_name, nullptr, 0, allowed_input_types, &input_buffer,
         &batchn_byte_size, &memory_type, &memory_type_id));
-
+LOG(ERROR) << "broken here 8";
     // Alloc OpenPPL Tensor
     auto ppl_tensor = runtime_->GetInputTensor(input_idx);
     ppl_tensor->GetShape()->Reshape(input_dims);
