@@ -692,27 +692,30 @@ ModelInstanceState::ReadOutputTensors(
       requests, request_count, responses, model_state_->MaxBatchSize(),
       model_state_->TritonMemoryManager(), model_state_->EnablePinnedInput(),
       CudaStream());
-
+LOG(ERROR) << "broken here 1";
   // Use to hold string output contents
   bool cuda_copy = false;
   std::pair<TRITONSERVER_MemoryType, int64_t> alloc_perference = {
-      TRITONSERVER_MEMORY_CPU, 0};
-
+      TRITONSERVER_MEMORY_GPU, 2};
+LOG(ERROR) << "broken here 2";
   for (uint32_t i = 0; i < runtime_->GetOutputCount(); i++) {
     auto ppl_tensor = runtime_->GetInputTensor(i);
     auto ppl_shape = ppl_tensor->GetShape();
     auto name = ppl_tensor->GetName();
     // const BatchOutput* batch_output = model_state_->FindBatchOutput(name);
-
+LOG(ERROR) << "broken here 3";
     TRITONSERVER_DataType dtype = ConvertFromOpenPPLDataType(ppl_shape->GetDataType());
 
     std::vector<int64_t> batchn_shape;
     for (uint32_t j = 0; j < ppl_shape->GetDimCount(); i++)
       batchn_shape.push_back(ppl_shape->GetDim(j));
-    
+LOG(ERROR) << "broken here 4";    
     responder.ProcessTensor(
               name, dtype, batchn_shape, reinterpret_cast<char*>(ppl_tensor->GetBufferPtr()),
               alloc_perference.first, alloc_perference.second);
+    for (size_t i = 0; i < 2; i++) {
+      LOG(INFO) << "ppl_tensor output shape: " << ppl_tensor->GetShape()->GetDim(i);
+    }
   }
 
   // Finalize and wait for any pending buffer copies.
