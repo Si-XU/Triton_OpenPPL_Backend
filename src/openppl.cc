@@ -155,7 +155,7 @@ class ModelInstanceState : public BackendModelInstance {
       ModelInstanceState** state);
   virtual ~ModelInstanceState() {
       LOG(ERROR) << "Begin to deconstruct ModelInstanceState";
-      delete runtime_.get();
+      // delete runtime_.get();
       // delete builder_.get();
       // for (uint32_t i = 0; i < engines_.size(); ++i) {
       //     delete engines_[i].get();
