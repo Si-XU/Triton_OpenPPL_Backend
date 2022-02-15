@@ -651,8 +651,10 @@ ModelInstanceState::SetInputTensors(
     // Alloc OpenPPL Tensor
     auto ppl_tensor = runtime_->GetInputTensor(input_idx);
     ppl_tensor->GetShape()->Reshape(input_dims);
+    LOG(ERROR) << "input count " << runtime_->GetInputCount() << " " << ppl_tensor;
     ppl_tensor->GetShape()->SetDataType(ConvertToOpenPPLDataType(input_datatype));
     ppl_tensor->GetShape()->SetDataFormat(DATAFORMAT_NDARRAY);
+    ppl_tensor->ReallocBuffer();
     ppl_tensor->ConvertFromHost(input_buffer, *ppl_tensor->GetShape());
   }
 
