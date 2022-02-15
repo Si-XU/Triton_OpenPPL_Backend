@@ -509,6 +509,9 @@ ModelInstanceState::ProcessRequests(
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
 
+  // Pretest 
+  LOG(INFO) << "before run input count " << runtime_->GetInputCount() << " " << runtime_->GetInputTensor(0);
+
   // TODO: Run
   RESPOND_ALL_AND_RETURN_IF_ERROR(
     requests, request_count, &responses, OpenPPLRun(&responses, request_count));
@@ -623,7 +626,7 @@ ModelInstanceState::SetInputTensors(
     std::vector<int64_t> input_dims = batchn_shape;
     for (size_t i = 0; i < input_dims_count; i++) {
       input_dims.push_back(input_shape[i]);
-      LOG(ERROR) << "input idx: " << input_idx << " has dims " << input_shape[i];
+      LOG(INFO) << "input idx: " << input_idx << " has dims " << input_shape[i];
     }
 
     // The input must be in contiguous CPU memory. Use appropriate
@@ -651,7 +654,7 @@ ModelInstanceState::SetInputTensors(
     // Alloc OpenPPL Tensor
     auto ppl_tensor = runtime_->GetInputTensor(input_idx);
     ppl_tensor->GetShape()->Reshape(input_dims);
-    LOG(ERROR) << "input count " << runtime_->GetInputCount() << " " << ppl_tensor;
+    LOG(INFO) << "input count " << runtime_->GetInputCount() << " " << ppl_tensor;
     ppl_tensor->GetShape()->SetDataType(ConvertToOpenPPLDataType(input_datatype));
     ppl_tensor->GetShape()->SetDataFormat(DATAFORMAT_NDARRAY);
     ppl_tensor->ReallocBuffer();
