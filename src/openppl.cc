@@ -624,9 +624,11 @@ ModelInstanceState::SetInputTensors(
     }
 
     std::vector<int64_t> input_dims = batchn_shape;
-    for (size_t i = 0; i < input_dims_count; i++) {
-      input_dims.push_back(input_shape[i]);
-      LOG(INFO) << "input idx: " << input_idx << " has dims " << input_shape[i];
+    if (input_dims.size() == 1) {
+      for (size_t i = 0; i < input_dims_count; i++) {
+        input_dims.push_back(input_shape[i]);
+        LOG(INFO) << "input idx: " << input_idx << " has dims " << input_shape[i];
+      }
     }
 
     // The input must be in contiguous CPU memory. Use appropriate
