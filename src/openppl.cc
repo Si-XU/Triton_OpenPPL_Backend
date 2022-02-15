@@ -156,7 +156,7 @@ class ModelInstanceState : public BackendModelInstance {
   virtual ~ModelInstanceState() {
       LOG(ERROR) << "Begin to deconstruct ModelInstanceState";
       // delete runtime_.get();
-      delete builder_.get();
+      // delete builder_.get();
       // for (uint32_t i = 0; i < engines_.size(); ++i) {
       //     delete engines_[i].get();
       // }
@@ -192,10 +192,10 @@ class ModelInstanceState : public BackendModelInstance {
   ModelState* model_state_;
 
   // Store input and output openppl tensers for all requests
-  unique_ptr<Runtime> runtime_;
-  unique_ptr<OnnxRuntimeBuilder> builder_;
   vector<unique_ptr<Engine>> engines_;
   vector<Engine*> engine_ptrs_;
+  unique_ptr<OnnxRuntimeBuilder> builder_;
+  unique_ptr<Runtime> runtime_;
 
 };
 
