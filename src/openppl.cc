@@ -510,7 +510,7 @@ ModelInstanceState::ProcessRequests(
   SET_TIMESTAMP(compute_start_ns);
 
   // Pretest 
-  LOG(INFO) << "before run input count " << runtime_->GetInputCount() << " " << runtime_->GetInputTensor(0);
+  LOG(INFO) << "before run input count " << runtime_->GetInputCount() << " " << runtime_->GetInputTensor(0)->GetBufferPtr();
 
   // TODO: Run
   RESPOND_ALL_AND_RETURN_IF_ERROR(
@@ -655,9 +655,14 @@ ModelInstanceState::SetInputTensors(
     auto ppl_tensor = runtime_->GetInputTensor(input_idx);
     ppl_tensor->GetShape()->Reshape(input_dims);
     LOG(INFO) << "input count " << runtime_->GetInputCount() << " " << ppl_tensor;
+    for (size_t i = 0; i < input_dims_count; i++) {
+      LOG(INFO) << "ppl_tensor shape: " << ppl_tensor->GetShape()->GetDim(i);
+    }
     ppl_tensor->GetShape()->SetDataType(ConvertToOpenPPLDataType(input_datatype));
     ppl_tensor->GetShape()->SetDataFormat(DATAFORMAT_NDARRAY);
     ppl_tensor->ReallocBuffer();
+     LOG(INFO) << "buffer ptr" << ppl_tensor->GetBufferPtr();
+     LOG(INFO) << "buffer ptr" << runtime_->GetInputTensor(0)->GetBufferPtr();
     ppl_tensor->ConvertFromHost(input_buffer, *ppl_tensor->GetShape());
   }
 
