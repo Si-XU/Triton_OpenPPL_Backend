@@ -264,13 +264,13 @@ ModelInstanceState::ModelInstanceState(
         TRITONSERVER_ERROR_INVALID_ARG, ("onnx preprocess failed: ")));
   }
 
-  runtime_.reset(builder_->CreateRuntime());
+  // runtime_.reset(builder_->CreateRuntime());
   
-  if (!runtime_) {
-    LOG(ERROR) << "Init runtime fail.";
-    throw BackendModelException(TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_INTERNAL, ("Init runtime fail.")));
-  }
+  // if (!runtime_) {
+  //   LOG(ERROR) << "Init runtime fail.";
+  //   throw BackendModelException(TRITONSERVER_ErrorNew(
+  //     TRITONSERVER_ERROR_INTERNAL, ("Init runtime fail.")));
+  // }
   LOG(INFO) << "***** create runtime *****";
 }
 
