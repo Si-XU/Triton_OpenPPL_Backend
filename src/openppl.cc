@@ -264,13 +264,13 @@ ModelInstanceState::ModelInstanceState(
         TRITONSERVER_ERROR_INVALID_ARG, ("onnx preprocess failed: ")));
   }
 
-  // runtime_.reset(builder_->CreateRuntime());
+  runtime_.reset(builder_->CreateRuntime());
   
-  // if (!runtime_) {
-  //   LOG(ERROR) << "Init runtime fail.";
-  //   throw BackendModelException(TRITONSERVER_ErrorNew(
-  //     TRITONSERVER_ERROR_INTERNAL, ("Init runtime fail.")));
-  // }
+  if (!runtime_) {
+    LOG(ERROR) << "Init runtime fail.";
+    throw BackendModelException(TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_INTERNAL, ("Init runtime fail.")));
+  }
   LOG(INFO) << "***** create runtime *****";
 }
 
@@ -669,6 +669,11 @@ ModelInstanceState::OpenPPLRun(
     std::vector<TRITONBACKEND_Response*>* responses,
     const uint32_t response_count)
 {
+  LOG(INFO) << "cuda run";
+  LOG(INFO) << "buffer ptr" << runtime_->GetInputTensor(0)->GetBufferPtr();
+  LOG(INFO) << "dim 1 " << runtime_->GetOutputTensor(0)->GetShape()->GetDim(1);
+  LOG(INFO) << "dim 2 " << runtime_->GetOutputTensor(0)->GetShape()->GetDim(2);
+  LOG(INFO) << "dim 3 " << runtime_->GetOutputTensor(0)->GetShape()->GetDim(3);
   auto status = runtime_->Run();
   if (status != ppl::common::RC_SUCCESS) {
     LOG_MESSAGE(TRITONSERVER_LOG_INFO, "Run failed.");
