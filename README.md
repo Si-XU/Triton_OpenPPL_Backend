@@ -29,17 +29,17 @@ follow [Preparing to use NVIDIA Containers](http://docs.nvidia.com/deeplearning/
 
 The [model repository](https://github.com/triton-inference-server/server/blob/main/docs/model_repository.md) 
 is the directory where you place the models that you want Triton to serve. 
-An example model repository is shown on [MaskrcnnExample]()
+An sample model repository is shown on [sample file](sample)
 
 ```
-model-repository/
+models/
     maskrcnn/
       config.pbtxt
       1/
         model.onnx
 ```
 
-Model backend name should be `OpenPPL`.
+Model platform name should be `openppl_onnx`. And `model.onnx` needs to be downloaded from [here]()
 
 ## Run Triton Sever
 
@@ -47,11 +47,17 @@ OpenPPL backend can only work on GPU systems.
 
 ### Run on System with GPUs
 
-Use the following command to run Triton with the example model
-repository you just created.
+Use docker pull to get the client libraries and examples image
+from NGC.
 
 ```
-$ docker run --gpus=1 --rm -p8000:8000 -p8001:8001 -p8002:8002 -v/full/path/to/docs/examples/model_repository:/models docker_image_name --model-repository=/models -backend-directory /mnt/citritonbuild/opt/tritonserver/backends/
+$ docker pull ppltriton/ppltriton:v01
+```
+
+Run docker.
+
+```
+$ docker run --gpus=1 --rm -p8000:8000 -p8001:8001 -p8002:8002 -v/sample/models:/models /opt/citritonbuild/opt/tritonserver/bin/tritonserver  --model-repository=/models --backend-directory=/opt/citritonbuild/opt/tritonserver/backends/
 ```
 
 After you start Triton you will see output on the
@@ -76,30 +82,14 @@ I1002 21:58:57.893177 62 http_server.cc:2717] Started HTTPService at 0.0.0.0:800
 All the models should show "READY" status to indicate that they loaded correctly. If a model fails to load the status will report the failure and a reason for the failure. If your model is not displayed in the table check the path to the model repository and your CUDA drivers.
 
 
-## Getting The Client Examples
-
-Use docker pull to get the client libraries and examples image
-from NGC.
-
-```
-$ docker pull nvcr.io/nvidia/tritonserver:<xx.yy>-py3-sdk
-```
-
-Where \<xx.yy\> is the version that you want to pull. Run the client
-image.
-
-```
-$ docker run -it --rm --net=host nvcr.io/nvidia/tritonserver:<xx.yy>-py3-sdk
-```
-
-### Running The Image Classification Example
+### Running The Image Detection Example
 
 An client example was included in [sample_maskrcnn.py]. You can test the example by following commands.
 
 ```
-pip3 install tritonclient[all]
-cd sample/client/
-python3 sample_maskrcnn.py -i test.jpg
+$ pip3 install tritonclient[all]
+$ cd sample/client/
+$ python3 sample_maskrcnn.py -i test.jpg
 ```
 
 Maskrcnn model will detect on the picture as below:
