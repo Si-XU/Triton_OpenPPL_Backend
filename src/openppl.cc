@@ -215,7 +215,7 @@ ModelInstanceState::ModelInstanceState(
     : BackendModelInstance(model_state, triton_model_instance),
       model_state_(model_state)
 {
-  // GetCurrentLogger()->SetLogLevel(2); // Only prrint Error message for pplnn
+  GetCurrentLogger()->SetLogLevel(2); // Only prrint Error message for pplnn
 
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     try {
