@@ -215,6 +215,8 @@ ModelInstanceState::ModelInstanceState(
     : BackendModelInstance(model_state, triton_model_instance),
       model_state_(model_state)
 {
+  // GetCurrentLogger()->SetLogLevel(2); // Only prrint Error message for pplnn
+
   if (Kind() == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
     try {
       RegisterCudaEngine(&engines_);
@@ -228,7 +230,6 @@ ModelInstanceState::ModelInstanceState(
         TRITONSERVER_ERROR_UNSUPPORTED, ("Only support GPU. Unsupport engine type input.")));
   }
 
-  GetCurrentLogger()->SetLogLevel(2); // Only prrint Error message for pplnn
 
   string version = std::to_string(model_state_->Version());
   string g_flag_onnx_model = model_state_->RepositoryPath() + "/" + version + "/model.onnx";
