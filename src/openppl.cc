@@ -153,14 +153,7 @@ class ModelInstanceState : public BackendModelInstance {
       ModelState* model_state,
       TRITONBACKEND_ModelInstance* triton_model_instance,
       ModelInstanceState** state);
-  virtual ~ModelInstanceState() {
-      LOG(ERROR) << "Begin to deconstruct ModelInstanceState";
-      // delete runtime_.get();
-      // delete builder_.get();
-      // for (uint32_t i = 0; i < engines_.size(); ++i) {
-      //     delete engines_[i].get();
-      // }
-  };
+  virtual ~ModelInstanceState() {};
 
   // Execute...
   void ProcessRequests(
@@ -235,6 +228,8 @@ ModelInstanceState::ModelInstanceState(
         TRITONSERVER_ERROR_UNSUPPORTED, ("Only support GPU. Unsupport engine type input.")));
   }
 
+  GetCurrentLogger()->SetLogLevel(2); // Only prrint Error message for pplnn
+
   string version = std::to_string(model_state_->Version());
   string g_flag_onnx_model = model_state_->RepositoryPath() + "/" + version + "/model.onnx";
   LOG(INFO) << "begin to read onnx-model: " << g_flag_onnx_model;
@@ -282,79 +277,8 @@ ModelInstanceState::RegisterCudaEngine(vector<unique_ptr<Engine>> *engines)
   options.mm_policy = CUDA_MM_BEST_FIT;
   auto cuda_engine = CudaEngineFactory::Create(options);
 
-  // triton::common::TritonJson::Value param;
-  // if (model_state_->ModelConfig().Find("paramters", &param)) {
-  //     auto cuda_engine = CudaEngineFactory::Create(options);
-  //     if (!cuda_engine) {
-  //         return TRITONSERVER_ErrorNew(
-  //             TRITONSERVER_ERROR_INTERNAL, ("invalid cuda engine"));
-  //     }
-
-  //     int64_t g_flag_quick_select = 0;
-  //     param.MemberAsInt("quick-select", &g_flag_quick_select);
-  //     cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, (bool)g_flag_quick_select);
-
-  //     std::string g_flag_kernel_type;
-  //     param.MemberAsString("kerne-type", &g_flag_kernel_type);
-  //     if (!g_flag_kernel_type.empty()) {
-  //         string kernel_type_str(g_flag_kernel_type);
-
-  //         datatype_t kernel_type = DATATYPE_UNKNOWN;
-  //         for (datatype_t i = DATATYPE_UNKNOWN; i < DATATYPE_MAX; i++) {
-  //             if (GetDataTypeStr(i) == kernel_type_str) {
-  //                 kernel_type = i;
-  //                 break;
-  //             }
-  //         }
-
-  //         if (kernel_type != DATATYPE_UNKNOWN) {
-  //           cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_KERNEL_TYPE, kernel_type);
-  //         } else {
-  //           string message = "invalid kernel type[" + g_flag_kernel_type + "]. valid values: int8/16/32/64,float16/32.";
-  //           return TRITONSERVER_ErrorNew(
-  //             TRITONSERVER_ERROR_INTERNAL, message.data());
-  //         }
-  //     }
-
-  //     string g_flag_quant_file;
-  //     param.MemberAsString("quant-file", &g_flag_quant_file);
-  //     if (!g_flag_quant_file.empty()) {
-  //         string file_content;
-  //         auto status = ReadFileContent(g_flag_quant_file.c_str(), &file_content);
-  //         if (status != RC_SUCCESS) {
-  //           string message = "invalid quant file path[" + g_flag_kernel_type + "].";
-  //           return TRITONSERVER_ErrorNew(
-  //               TRITONSERVER_ERROR_INTERNAL, message.data());
-  //         }
-  //         cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_QUANT_INFO, file_content.c_str());
-  //     }
-
-  //     string g_flag_export_algo_file;
-  //     param.MemberAsString("export-algo-file", &g_flag_export_algo_file);
-  //     if (!g_flag_export_algo_file.empty()) {
-  //         cuda_engine->Configure(ppl::nn::CUDA_CONF_EXPORT_ALGORITHMS, g_flag_export_algo_file.c_str());
-  //     }
-
-  //     string g_flag_import_algo_file;
-  //     param.MemberAsString("import-algo-file", &g_flag_import_algo_file);  
-  //     if (!g_flag_import_algo_file.empty()) {
-  //         // import and export from the same file
-  //         if (g_flag_import_algo_file == g_flag_export_algo_file) {
-  //             // try to create this file first
-  //             ofstream ofs(g_flag_export_algo_file, ios_base::app);
-  //             if (!ofs.is_open()) {
-  //               string message = "invalid algo file path[" + g_flag_import_algo_file + "].";
-  //               return TRITONSERVER_ErrorNew(
-  //                   TRITONSERVER_ERROR_INTERNAL, message.data());
-  //             }
-  //             ofs.close();
-  //         }
-  //         cuda_engine->Configure(ppl::nn::CUDA_CONF_IMPORT_ALGORITHMS, g_flag_import_algo_file.c_str());
-  //     }
-  // }
-
   // TODO: Use quick select for test
-  cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, true);
+  cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, false);
 
   // pass input shapes to cuda engine for further optimizations
   string g_flag_input_shapes = "1_3_224_224"; // TODO: use input dims
@@ -409,7 +333,7 @@ ModelInstanceState::ProcessRequests(
           TRITONSERVER_ErrorNew(
               TRITONSERVER_ERROR_INTERNAL,
               std::string(
-                  "null request given to ONNX Runtime backend for '" + Name() +
+                  "null request given to Openppl backend for '" + Name() +
                   "'")
                   .c_str()));
       return;
@@ -509,7 +433,6 @@ ModelInstanceState::ProcessRequests(
   uint64_t compute_start_ns = 0;
   SET_TIMESTAMP(compute_start_ns);
 
-  // TODO: Run
   RESPOND_ALL_AND_RETURN_IF_ERROR(
     requests, request_count, &responses, OpenPPLRun(&responses, request_count));
 
@@ -533,7 +456,7 @@ ModelInstanceState::ProcessRequests(
       LOG_IF_ERROR(
           TRITONBACKEND_ResponseSend(
               response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, nullptr),
-          "failed to send onnxruntime backend response");
+          "failed to send OpenPPL backend response");
     }
   }
 
@@ -671,8 +594,6 @@ ModelInstanceState::OpenPPLRun(
     const uint32_t response_count)
 {
   auto status = runtime_->Run();
-  LOG(INFO) << "output dim 0 " << runtime_->GetOutputTensor(0)->GetShape()->GetDim(0);
-  LOG(INFO) << "output dim 1 " << runtime_->GetOutputTensor(0)->GetShape()->GetDim(1);
   if (status != ppl::common::RC_SUCCESS) {
     LOG_MESSAGE(TRITONSERVER_LOG_INFO, "Run failed.");
   } else {
@@ -692,32 +613,28 @@ ModelInstanceState::ReadOutputTensors(
       requests, request_count, responses, model_state_->MaxBatchSize(),
       model_state_->TritonMemoryManager(), model_state_->EnablePinnedInput(),
       CudaStream());
-LOG(ERROR) << "broken here 1";
+
   // Use to hold string output contents
   bool cuda_copy = false;
   std::pair<TRITONSERVER_MemoryType, int64_t> alloc_perference = {
       TRITONSERVER_MEMORY_GPU, 2};
-LOG(ERROR) << "broken here 2";
+
   for (uint32_t i = 0; i < runtime_->GetOutputCount(); i++) {
     auto ppl_tensor = runtime_->GetOutputTensor(i);
     auto ppl_shape = ppl_tensor->GetShape();
     auto name = ppl_tensor->GetName();
     // const BatchOutput* batch_output = model_state_->FindBatchOutput(name);
-LOG(ERROR) << "broken here 3";
+
     TRITONSERVER_DataType dtype = ConvertFromOpenPPLDataType(ppl_shape->GetDataType());
-LOG(ERROR) << "broken here 3.1";
+
     std::vector<int64_t> batchn_shape;
     for (uint32_t j = 0; j < ppl_shape->GetDimCount(); j++) {
       batchn_shape.push_back(ppl_shape->GetDim(j));
-      LOG(ERROR) << batchn_shape[j];
     }
-LOG(ERROR) << "broken here 4";    
+
     responder.ProcessTensor(
               name, dtype, batchn_shape, reinterpret_cast<char*>(ppl_tensor->GetBufferPtr()),
               alloc_perference.first, alloc_perference.second);
-    for (size_t i = 0; i < 2; i++) {
-      LOG(INFO) << "ppl_tensor output shape: " << ppl_tensor->GetShape()->GetDim(i);
-    }
   }
 
   // Finalize and wait for any pending buffer copies.

@@ -57,7 +57,7 @@ namespace triton { namespace backend { namespace openppl {
               TRITONBACKEND_ResponseSend(                         \
                   response, TRITONSERVER_RESPONSE_COMPLETE_FINAL, \
                   raarie_err__),                                  \
-              "failed to send ONNXRuntime backend response");     \
+              "failed to send OpenPPL backend response");     \
           response = nullptr;                                     \
         }                                                         \
         LOG_IF_ERROR(                                             \
