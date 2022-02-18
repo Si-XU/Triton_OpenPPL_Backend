@@ -279,7 +279,7 @@ ModelInstanceState::RegisterCudaEngine(vector<unique_ptr<Engine>> *engines)
   auto cuda_engine = CudaEngineFactory::Create(options);
 
   // TODO: Use quick select for test
-  cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, false);
+  cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, true);
 
   // pass input shapes to cuda engine for further optimizations
   string g_flag_input_shapes = "1_3_224_224"; // TODO: use input dims
