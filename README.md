@@ -29,7 +29,7 @@ follow [Preparing to use NVIDIA Containers](http://docs.nvidia.com/deeplearning/
 
 The [model repository](https://github.com/triton-inference-server/server/blob/main/docs/model_repository.md) 
 is the directory where you place the models that you want Triton to serve. 
-An sample model repository is shown on [sample file](sample)
+An sample model repository is shown on [sample file](sample/models)
 
 ```
 models/
@@ -39,7 +39,7 @@ models/
         model.onnx
 ```
 
-Model platform name should be `openppl_onnx`. And `model.onnx` needs to be downloaded from [here]()
+Model platform name should be `openppl_onnx`.
 
 ## Run Triton Sever
 
@@ -47,8 +47,7 @@ OpenPPL backend can only work on GPU systems.
 
 ### Run on System with GPUs
 
-Use docker pull to get the client libraries and examples image
-from NGC.
+Use docker pull from DockerHub. You need to register an account before docker pull.
 
 ```
 $ docker pull ppltriton/ppltriton:v01
@@ -84,7 +83,7 @@ All the models should show "READY" status to indicate that they loaded correctly
 
 ### Running The Image Detection Example
 
-An client example was included in [sample_maskrcnn.py]. You can test the example by following commands.
+An client example was included in [sample_maskrcnn.py](sample/client/sample_maskrcnn.py). You can test the example by following commands.
 
 ```
 $ pip3 install tritonclient[all]
@@ -92,6 +91,6 @@ $ cd sample/client/
 $ python3 sample_maskrcnn.py -i test.jpg
 ```
 
-Maskrcnn model will detect on the picture as below:
+Maskrcnn model will detect the tested picture as below:
 
 ![Output](sample/client/test_out.jpg)
