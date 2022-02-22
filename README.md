@@ -56,7 +56,7 @@ $ docker pull ppltriton/ppltriton:v01
 Run docker.
 
 ```
-$ docker run --gpus=1 --rm -p8000:8000 -p8001:8001 -p8002:8002 -v/sample/models:/models ppltriton/ppltriton:v01 /opt/citritonbuild/opt/tritonserver/bin/tritonserver  --model-repository=/models --backend-directory=/opt/citritonbuild/opt/tritonserver/backends/
+$ docker run --gpus=1 --rm -p8000:8000 -p8001:8001 -p8002:8002 -v/`pwd`/sample/models:/models ppltriton/ppltriton:v01 /opt/citritonbuild/opt/tritonserver/bin/tritonserver  --model-repository=/models --backend-directory=/opt/citritonbuild/opt/tritonserver/backends/
 ```
 
 After you start Triton you will see output on the
