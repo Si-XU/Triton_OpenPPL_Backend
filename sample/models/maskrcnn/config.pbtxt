@@ -12,14 +12,14 @@ output [
     name: "labels"
     data_type: TYPE_INT64
     dims: [ 80 ]
-  }
+  },
   {
     name: "dets"
     data_type: TYPE_FP32
     dims: [ 80, 5 ]
-  }
+  },
   {
-    name: "mask"
+    name: "masks"
     data_type: TYPE_BOOL
     dims: [ 80, -1, -1 ]
   }
